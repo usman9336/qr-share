@@ -10,8 +10,7 @@
 :root{--bg1:#0f0c29;--bg2:#302b63;--bg3:#24243e;--glass:rgba(255,255,255,.08);--bd:rgba(255,255,255,.18);--tx:#f2f2ff;--mut:#b4b4d6;--ac:#7c5cff;--ac2:#00d4ff;--ok:#2ee6a6}
 @media(prefers-color-scheme:light){:root{--bg1:#e8eaff;--bg2:#d6ccff;--bg3:#c9f0ff;--glass:rgba(255,255,255,.55);--bd:rgba(255,255,255,.8);--tx:#1b1b3a;--mut:#55557a}}
 *{box-sizing:border-box;margin:0}
-html,body{min-height:100%}
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--tx);background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));background-attachment:fixed;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--tx);min-height:100vh;background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));background-attachment:fixed;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
 .wrap{max-width:900px;margin:auto;display:grid;gap:16px}
 .glass{background:var(--glass);border:1px solid var(--bd);border-radius:20px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.25)}
 h1{font-size:1.5rem;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
@@ -21,7 +20,6 @@ h1 span.logo{background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-back
 #pair{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center}
 @media(max-width:560px){#pair{grid-template-columns:1fr;justify-items:center;text-align:center}}
 #qr{background:#fff;padding:12px;border-radius:16px;width:184px;height:184px}
-#qr img,#qr canvas{display:block}
 .code{font-size:2rem;letter-spacing:.3em;font-weight:700;margin:6px 0}
 .mut{color:var(--mut);font-size:.9rem}
 input,textarea,button{font:inherit;color:var(--tx)}
@@ -29,14 +27,17 @@ input,textarea{width:100%;background:var(--glass);border:1px solid var(--bd);bor
 input:focus,textarea:focus{border-color:var(--ac)}
 button{border:0;border-radius:12px;padding:11px 18px;cursor:pointer;background:linear-gradient(90deg,var(--ac),var(--ac2));color:#fff;font-weight:600}
 button.sec{background:var(--glass);border:1px solid var(--bd);color:var(--tx)}
-button:disabled{opacity:.5;cursor:not-allowed}
 .row{display:flex;gap:8px;margin-top:10px}
-#drop{border:2px dashed var(--bd);border-radius:16px;padding:26px;text-align:center;cursor:pointer;color:var(--mut);transition:.2s}
+#users{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.chip{padding:7px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--glass);cursor:pointer;font-size:.85rem;user-select:none}
+.chip.sel{background:linear-gradient(90deg,var(--ac),var(--ac2));color:#fff;border-color:transparent}
+#drop{border:2px dashed var(--bd);border-radius:16px;padding:24px;text-align:center;cursor:pointer;color:var(--mut);transition:.2s}
 #drop.hot{border-color:var(--ac2);background:var(--glass);color:var(--tx)}
 #log{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;margin-top:14px}
 .m{max-width:85%;padding:10px 14px;border-radius:14px;background:var(--glass);border:1px solid var(--bd);word-break:break-word;font-size:.95rem}
 .m.me{align-self:flex-end;background:linear-gradient(90deg,rgba(124,92,255,.5),rgba(0,212,255,.4))}
 .m small{display:block;color:var(--mut);margin-top:4px;font-size:.75rem}
+.m .who{margin:0 0 4px;font-weight:600}
 .bar{height:6px;border-radius:9px;background:var(--bd);margin-top:8px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2))}
 .m a{color:var(--ac2);font-weight:600}
@@ -51,120 +52,185 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <div class="glass" id="pair">
     <div id="qr"></div>
     <div>
-      <div class="mut">Dusre device se QR scan karo ya code daalo</div>
+      <div class="mut">Sab log QR scan karke ya code daalke judo</div>
       <div class="code" id="code">······</div>
-      <div class="row" style="margin-top:12px"><input id="join" inputmode="numeric" maxlength="6" placeholder="6-digit code daalo (join karne ke liye)"><button id="jb" class="sec">Join</button></div>
+      <input id="nm" maxlength="20" placeholder="Tumhara naam">
+      <div class="row"><input id="join" inputmode="numeric" maxlength="6" placeholder="Dusre ka 6-digit code"><button id="jb" class="sec">Join</button></div>
       <div class="row"><button id="cl" class="sec">🔗 Link copy</button></div>
     </div>
   </div>
 
   <div class="glass hide" id="app">
+    <div class="mut" style="margin-bottom:8px">Kisko bhejna hai (tap karke chuno):</div>
+    <div id="users"></div>
     <div id="drop">📁 File yahan drop karo ya tap karke chuno (multiple chalegi)<input type="file" id="fi" multiple hidden></div>
     <div id="log"></div>
-    <div class="row"><textarea id="tx" rows="2" placeholder="Message ya text likho… (Enter = send, Shift+Enter = new line)"></textarea><button id="sb">Send</button></div>
+    <div class="row"><textarea id="tx" rows="2" placeholder="Message likho… (Enter = send, Shift+Enter = new line)"></textarea><button id="sb">Send</button></div>
   </div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const CH=65536, PFX='qrshare-';
-let peer,conn,incoming=null,queue=[],sending=false;
+const CH=65536,BIG=8388608,PFX='qrshare-';
+let peer,conn,isHost=false,myId='',conns={},names={},peers=[],deSel=new Set(),inc={},routes={},queue=[],sending=false;
+const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rid=()=>String(Math.floor(100000+Math.random()*900000));
 const hash=()=>location.hash.replace('#','').trim();
 const setSt=(t,on)=>{$('st').textContent=t;$('st').classList.toggle('on',!!on)};
-const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
-const rid=()=>String(Math.floor(100000+Math.random()*900000));
+try{$('nm').value=localStorage.getItem('qs_name')||''}catch(e){}
+if(!$('nm').value)$('nm').value='User'+Math.floor(10+Math.random()*90);
+$('nm').oninput=()=>{try{localStorage.setItem('qs_name',$('nm').value)}catch(e){}if(isHost)pushPeers()};
+const myName=()=>($('nm').value.trim()||'User').slice(0,20);
+const q=(c,fn,d)=>{c._q=(c._q||Promise.resolve()).then(()=>fn(d)).catch(console.error)};
+const toBuf=async d=>d instanceof ArrayBuffer?d:(d.buffer?d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength):await new Blob([d]).arrayBuffer());
+const drain=async c=>{const dc=c.dataChannel;if(dc&&dc.bufferedAmount>BIG){dc.bufferedAmountLowThreshold=BIG/2;await new Promise(r=>{dc.onbufferedamountlow=()=>{dc.onbufferedamountlow=null;r()}})}};
 
 function showQR(id){
   const url=location.origin+location.pathname+'#'+id;
-  $('code').textContent=id; $('qr').innerHTML='';
-  try{new QRCode($('qr'),{text:url,width:160,height:160,correctLevel:QRCode.CorrectLevel.M})}catch(e){$('qr').textContent='QR error'}
+  $('code').textContent=id;$('qr').innerHTML='';
+  try{new QRCode($('qr'),{text:url,width:160,height:160,correctLevel:QRCode.CorrectLevel.M})}catch(e){}
   $('cl').onclick=()=>navigator.clipboard.writeText(url).then(()=>{$('cl').textContent='✓ Copied';setTimeout(()=>$('cl').textContent='🔗 Link copy',1500)});
 }
 
+/* ---------- HOST (hub) ---------- */
 function host(){
-  const id=rid(); showQR(id); setSt('waiting for device…');
-  peer=new Peer(PFX+id);
+  isHost=true;myId='host';showQR(rid_=rid());setSt('● room live',true);$('app').classList.remove('hide');
+  peer=new Peer(PFX+rid_);
   peer.on('error',e=>{if(e.type==='unavailable-id')host();else setSt('error: '+e.type)});
-  peer.on('connection',c=>{if(conn&&conn.open){c.close();return}bind(c)});
+  peer.on('connection',c=>{
+    conns[c.peer]=c;
+    c.on('data',d=>q(c,x=>hostRecv(c.peer,x),d));
+    c.on('close',()=>{const n=names[c.peer];delete conns[c.peer];delete names[c.peer];if(n)sys(esc(n)+' chala gaya');pushPeers()});
+    c.on('error',()=>{});
+  });
+  pushPeers();
 }
-function guest(id){
-  $('code').textContent=id; $('qr').innerHTML='<div style="color:#333;font-size:.8rem;padding:60px 8px;text-align:center">Joining…</div>';
-  setSt('connecting…');
-  peer=new Peer();
-  peer.on('open',()=>bind(peer.connect(PFX+id,{reliable:true,serialization:'raw'})));
-  peer.on('error',e=>setSt(e.type==='peer-unavailable'?'code galat / host offline':'error: '+e.type));
+let rid_;
+function pushPeers(){
+  peers=[{id:'host',name:myName()},...Object.keys(conns).filter(k=>names[k]).map(k=>({id:k,name:names[k]}))];
+  const s=JSON.stringify({t:'peers',list:peers});
+  Object.values(conns).forEach(c=>c.open&&c.send(s));
+  renderUsers();
 }
-
-function bind(c){
-  conn=c;
-  c.on('open',()=>{setSt('● connected',true);$('pair').classList.add('hide');$('app').classList.remove('hide');add('Device connected 🎉',false,true)});
-  c.on('close',()=>{setSt('disconnected');add('Connection band ho gaya',false,true);$('sb').disabled=true});
-  c.on('data',onData);
-  c.on('error',e=>setSt('error'));
-}
-
-function send(o){conn.send(JSON.stringify(o))}
-
-function add(html,me,sys){
-  const d=document.createElement('div');d.className='m'+(me?' me':'');
-  if(sys){d.style.alignSelf='center';d.style.color='var(--mut)'}
-  d.innerHTML=html;$('log').appendChild(d);$('log').scrollTop=1e9;return d;
-}
-const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function textMsg(t,me){
-  const d=add(esc(t).replace(/\n/g,'<br>')+'<button class="cp">copy</button>',me);
-  d.querySelector('.cp').onclick=e=>{navigator.clipboard.writeText(t);e.target.textContent='✓'};
-}
-
-async function onData(d){
+async function hostRecv(from,d){
   if(typeof d==='string'){
     const m=JSON.parse(d);
-    if(m.t==='text')textMsg(m.d,false);
-    else if(m.t==='meta'){
-      const el=add(`⬇️ <b>${esc(m.name)}</b> (${fmt(m.size)})<div class="bar"><i></i></div><small>receiving…</small>`,false);
-      incoming={m,parts:[],got:0,el,t0:Date.now()};
-    }else if(m.t==='end'&&incoming){
-      const {m:mm,parts,el}=incoming;
-      const url=URL.createObjectURL(new Blob(parts,{type:mm.type||'application/octet-stream'}));
-      el.querySelector('small').innerHTML=`<a href="${url}" download="${esc(mm.name)}">Download karo</a>`;
-      el.querySelector('i').style.width='100%';incoming=null;
+    if(m.t==='hello'){names[from]=(m.name||'User').slice(0,20);sys(esc(names[from])+' join hua 🎉');pushPeers();return}
+    const ids=m.to||[];
+    if(m.t==='meta')routes[m.tid]=ids;
+    const out=JSON.stringify({...m,to:undefined,from,fn:names[from]});
+    for(const id of ids){
+      if(id==='host')deliver({...m,from,fn:names[from]});
+      else if(conns[id]&&conns[id].open)conns[id].send(out);
     }
-  }else if(incoming){
-    const buf=d instanceof ArrayBuffer?d:(d.buffer?d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength):await new Blob([d]).arrayBuffer());
-    incoming.parts.push(buf);incoming.got+=buf.byteLength;
-    if(Date.now()-(incoming.last||0)>150){incoming.last=Date.now();
-    const p=incoming.got/incoming.m.size*100,sp=incoming.got/((Date.now()-incoming.t0)/1000||1);
-    incoming.el.querySelector('i').style.width=p+'%';
-    incoming.el.querySelector('small').textContent=`${p.toFixed(0)}% · ${fmt(sp)}/s`;}
+    if(m.t==='end')delete routes[m.tid];
+  }else{
+    const buf=await toBuf(d),tid=new DataView(buf).getUint32(0);
+    for(const id of routes[tid]||[]){
+      if(id==='host')deliverChunk(buf);
+      else if(conns[id]&&conns[id].open){await drain(conns[id]);conns[id].send(buf)}
+    }
   }
 }
 
-function sendText(){
-  const t=$('tx').value.trim();if(!t||!conn||!conn.open)return;
-  send({t:'text',d:t});textMsg(t,true);$('tx').value='';
+/* ---------- GUEST ---------- */
+function guest(id){
+  $('code').textContent=id;$('qr').innerHTML='<div style="color:#333;font-size:.8rem;padding:60px 8px;text-align:center">Joining…</div>';
+  setSt('connecting…');
+  peer=new Peer();
+  peer.on('error',e=>setSt(e.type==='peer-unavailable'?'code galat / host offline':'error: '+e.type));
+  peer.on('open',pid=>{
+    myId=pid;conn=peer.connect(PFX+id,{reliable:true,serialization:'raw'});
+    conn.on('open',()=>{conn.send(JSON.stringify({t:'hello',name:myName()}));setSt('● connected',true);$('pair').classList.add('hide');$('app').classList.remove('hide')});
+    conn.on('data',d=>q(conn,guestRecv,d));
+    conn.on('close',()=>{setSt('host disconnected');sys('Room band ho gaya');$('sb').disabled=true});
+    conn.on('error',()=>{});
+  });
 }
-function addFiles(fs){for(const f of fs)queue.push(f);pump()}
+async function guestRecv(d){
+  if(typeof d==='string'){
+    const m=JSON.parse(d);
+    if(m.t==='peers'){peers=m.list;renderUsers()}else deliver(m);
+  }else deliverChunk(await toBuf(d));
+}
+
+/* ---------- UI / receive ---------- */
+function sys(h){const d=document.createElement('div');d.className='m';d.style.cssText='align-self:center;color:var(--mut)';d.innerHTML=h;$('log').appendChild(d);$('log').scrollTop=1e9}
+function add(html,me){const d=document.createElement('div');d.className='m'+(me?' me':'');d.innerHTML=html;$('log').appendChild(d);$('log').scrollTop=1e9;return d}
+const others=()=>peers.filter(p=>p.id!==myId);
+const targets=()=>others().filter(p=>!deSel.has(p.id)).map(p=>p.id);
+const nameOf=id=>(peers.find(p=>p.id===id)||{}).name||'?';
+function renderUsers(){
+  const o=others(),u=$('users');u.innerHTML='';
+  if(peers.length)setSt('● '+peers.length+' user'+(peers.length>1?'s':'')+' online',true);
+  if(!o.length){u.innerHTML='<span class="mut">Abhi koi aur nahi juda. QR share karo 👆</span>';return}
+  const all=document.createElement('div');all.className='chip'+(deSel.size===0?' sel':'');all.textContent='👥 Sabko';
+  all.onclick=()=>{deSel.clear();renderUsers()};u.appendChild(all);
+  o.forEach(p=>{const c=document.createElement('div');c.className='chip'+(deSel.has(p.id)?'':' sel');c.textContent=p.name;
+    c.onclick=()=>{deSel.has(p.id)?deSel.delete(p.id):deSel.add(p.id);renderUsers()};u.appendChild(c)});
+}
+function textMsg(t,me,who){
+  const d=add(`<small class="who">${esc(who)}</small>`+esc(t).replace(/\n/g,'<br>')+'<button class="cp">copy</button>',me);
+  d.querySelector('.cp').onclick=e=>{navigator.clipboard.writeText(t);e.target.textContent='✓'};
+}
+function deliver(m){
+  if(m.t==='text')textMsg(m.d,false,m.fn);
+  else if(m.t==='meta'){
+    const el=add(`<small class="who">${esc(m.fn)}</small>⬇️ <b>${esc(m.name)}</b> (${fmt(m.size)})<div class="bar"><i></i></div><small>receiving…</small>`,false);
+    inc[m.tid]={m,parts:[],got:0,el,t0:Date.now(),last:0};
+  }else if(m.t==='end'&&inc[m.tid]){
+    const r=inc[m.tid];delete inc[m.tid];
+    const url=URL.createObjectURL(new Blob(r.parts,{type:r.m.type||'application/octet-stream'}));
+    r.el.querySelector('small:last-child').innerHTML=`<a href="${url}" download="${esc(r.m.name)}">Download karo</a>`;
+    r.el.querySelector('i').style.width='100%';
+  }
+}
+function deliverChunk(buf){
+  const r=inc[new DataView(buf).getUint32(0)];if(!r)return;
+  const p=new Uint8Array(buf,4);r.parts.push(p);r.got+=p.byteLength;
+  if(Date.now()-r.last>150){r.last=Date.now();
+    const pc=r.got/r.m.size*100;
+    r.el.querySelector('i').style.width=pc+'%';
+    r.el.querySelector('small:last-child').textContent=`${pc.toFixed(0)}% · ${fmt(r.got/((Date.now()-r.t0)/1000||1))}/s`;}
+}
+
+/* ---------- send ---------- */
+function emit(m){
+  if(isHost){const s=JSON.stringify({...m,to:undefined,from:'host',fn:myName()});m.to.forEach(id=>conns[id]&&conns[id].open&&conns[id].send(s))}
+  else conn.send(JSON.stringify(m));
+}
+const whoStr=ids=>'→ '+(deSel.size===0?'Sabko':ids.map(nameOf).join(', '));
+function sendText(){
+  const t=$('tx').value.trim();if(!t)return;
+  const ids=targets();if(!ids.length){sys('Pehle kisi ko select karo');return}
+  emit({t:'text',d:t,to:ids});textMsg(t,true,whoStr(ids));$('tx').value='';
+}
+function addFiles(fs){
+  const ids=targets();if(!ids.length){sys('Pehle kisi ko select karo');return}
+  for(const f of fs)queue.push({f,ids,w:whoStr(ids)});pump();
+}
 async function pump(){
   if(sending)return;sending=true;
   while(queue.length){
-    const f=queue.shift();
-    const el=add(`⬆️ <b>${esc(f.name)}</b> (${fmt(f.size)})<div class="bar"><i></i></div><small>sending…</small>`,true);
-    send({t:'meta',name:f.name,size:f.size,type:f.type});
-    const t0=Date.now(),dc=conn.dataChannel,BIG=8388608;let off=0,last=0;
-    dc.bufferedAmountLowThreshold=BIG/2;
+    const {f,ids,w}=queue.shift(),tid=Math.floor(Math.random()*4294967295)>>>0;
+    const cs=isHost?ids.map(i=>conns[i]).filter(c=>c&&c.open):[conn];
+    const el=add(`<small class="who">${esc(w)}</small>⬆️ <b>${esc(f.name)}</b> (${fmt(f.size)})<div class="bar"><i></i></div><small>sending…</small>`,true);
+    const sm=el.querySelector('small:last-child'),bar=el.querySelector('i');
+    emit({t:'meta',tid,name:f.name,size:f.size,type:f.type,to:ids});
+    const t0=Date.now();let off=0,last=0;
     while(off<f.size){
       const big=await f.slice(off,off+BIG).arrayBuffer();
       for(let p=0;p<big.byteLength;p+=CH){
-        if(dc.bufferedAmount>BIG)await new Promise(r=>{dc.onbufferedamountlow=()=>{dc.onbufferedamountlow=null;r()}});
-        conn.send(new Uint8Array(big,p,Math.min(CH,big.byteLength-p)));
+        const n=Math.min(CH,big.byteLength-p),u=new Uint8Array(4+n);
+        new DataView(u.buffer).setUint32(0,tid);u.set(new Uint8Array(big,p,n),4);
+        for(const c of cs){await drain(c);if(c.open)c.send(u)}
       }
       off+=big.byteLength;
-      if(Date.now()-last>150){last=Date.now();
-        el.querySelector('i').style.width=(off/f.size*100)+'%';
-        el.querySelector('small').textContent=`${(off/f.size*100).toFixed(0)}% · ${fmt(off/((Date.now()-t0)/1000||1))}/s`;}
+      if(Date.now()-last>150){last=Date.now();bar.style.width=(off/f.size*100)+'%';sm.textContent=`${(off/f.size*100).toFixed(0)}% · ${fmt(off/((Date.now()-t0)/1000||1))}/s`}
     }
-    while(dc.bufferedAmount>0)await new Promise(r=>setTimeout(r,50));
-    send({t:'end'});el.querySelector('small').textContent='✓ sent';
+    for(const c of cs)while(c.open&&c.dataChannel.bufferedAmount>0)await new Promise(r=>setTimeout(r,50));
+    emit({t:'end',tid,to:ids});bar.style.width='100%';sm.textContent='✓ sent';
   }
   sending=false;
 }
@@ -176,9 +242,8 @@ $('fi').onchange=e=>{addFiles(e.target.files);e.target.value=''};
 ['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('hot')}));
 ['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('hot')}));
 $('drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-addEventListener('paste',e=>{if(e.clipboardData.files.length&&conn&&conn.open)addFiles(e.clipboardData.files)});
+addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files)});
 $('jb').onclick=()=>{const v=$('join').value.trim();if(/^\d{6}$/.test(v)){location.hash=v;location.reload()}};
-
 /^\d{6}$/.test(hash())?guest(hash()):host();
 </script>
 </body>
