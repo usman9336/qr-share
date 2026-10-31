@@ -67,7 +67,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
 <script>
 const $=id=>document.getElementById(id);
-const CH=16384, PFX='qrshare-';
+const CH=65536, PFX='qrshare-';
 let peer,conn,incoming=null,queue=[],sending=false;
 const hash=()=>location.hash.replace('#','').trim();
 const setSt=(t,on)=>{$('st').textContent=t;$('st').classList.toggle('on',!!on)};
@@ -132,9 +132,10 @@ async function onData(d){
   }else if(incoming){
     const buf=d instanceof ArrayBuffer?d:(d.buffer?d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength):await new Blob([d]).arrayBuffer());
     incoming.parts.push(buf);incoming.got+=buf.byteLength;
+    if(Date.now()-(incoming.last||0)>150){incoming.last=Date.now();
     const p=incoming.got/incoming.m.size*100,sp=incoming.got/((Date.now()-incoming.t0)/1000||1);
     incoming.el.querySelector('i').style.width=p+'%';
-    incoming.el.querySelector('small').textContent=`${p.toFixed(0)}% · ${fmt(sp)}/s`;
+    incoming.el.querySelector('small').textContent=`${p.toFixed(0)}% · ${fmt(sp)}/s`;}
   }
 }
 
@@ -149,14 +150,20 @@ async function pump(){
     const f=queue.shift();
     const el=add(`⬆️ <b>${esc(f.name)}</b> (${fmt(f.size)})<div class="bar"><i></i></div><small>sending…</small>`,true);
     send({t:'meta',name:f.name,size:f.size,type:f.type});
-    const t0=Date.now();let off=0;
+    const t0=Date.now(),dc=conn.dataChannel,BIG=8388608;let off=0,last=0;
+    dc.bufferedAmountLowThreshold=BIG/2;
     while(off<f.size){
-      const buf=await f.slice(off,off+CH).arrayBuffer();
-      while(conn.dataChannel&&conn.dataChannel.bufferedAmount>1048576)await new Promise(r=>setTimeout(r,15));
-      conn.send(buf);off+=buf.byteLength;
-      el.querySelector('i').style.width=(off/f.size*100)+'%';
-      el.querySelector('small').textContent=`${(off/f.size*100).toFixed(0)}% · ${fmt(off/((Date.now()-t0)/1000||1))}/s`;
+      const big=await f.slice(off,off+BIG).arrayBuffer();
+      for(let p=0;p<big.byteLength;p+=CH){
+        if(dc.bufferedAmount>BIG)await new Promise(r=>{dc.onbufferedamountlow=()=>{dc.onbufferedamountlow=null;r()}});
+        conn.send(new Uint8Array(big,p,Math.min(CH,big.byteLength-p)));
+      }
+      off+=big.byteLength;
+      if(Date.now()-last>150){last=Date.now();
+        el.querySelector('i').style.width=(off/f.size*100)+'%';
+        el.querySelector('small').textContent=`${(off/f.size*100).toFixed(0)}% · ${fmt(off/((Date.now()-t0)/1000||1))}/s`;}
     }
+    while(dc.bufferedAmount>0)await new Promise(r=>setTimeout(r,50));
     send({t:'end'});el.querySelector('small').textContent='✓ sent';
   }
   sending=false;
