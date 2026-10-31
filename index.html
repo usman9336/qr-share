@@ -82,11 +82,11 @@ input,textarea{width:100%;background:var(--gl);border:1px solid var(--bd);border
 <div class="ov hide" id="ovMulti"><div class="gl"><b>Kai logo ko ek saath bhejo</b><div id="mlist" style="text-align:left;max-height:200px;overflow:auto"></div><textarea id="mtx" rows="3" placeholder="Message…"></textarea><input type="file" id="mfi" multiple><button id="mSend">Send</button><button class="s" data-x>Band karo</button></div></div>
 <div id="toast" class="hide"></div>
 <script>
-const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=65536,BIG=8388608,MAXF=314572800;
+const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=131072,BIG=8388608,MAXF=8589934592,NS=3;
 const lg=(k,v)=>{try{return v===undefined?L.getItem(k):L.setItem(k,v)}catch(e){return null}};
 const rnd=(n,al='abcdefghjkmnpqrstuvwxyz23456789')=>Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>al[b%al.length]).join('');
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
-const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
+const fmt=n=>n<1024?Math.round(n)+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
 const cleanName=s=>String(s||'').replace(/[\u0000-\u001f\u007f<>]/g,'').trim().slice(0,20)||'User';
 const cleanFile=s=>String(s||'').replace(/[\u0000-\u001f<>:"\/\\|?*]+/g,'_').replace(/^\.+/,'').slice(0,120)||'file';
 const safeMime=t=>/^image\/(png|jpeg|gif|webp)$/.test(t)?t:'application/octet-stream';
@@ -95,8 +95,34 @@ const te=new TextEncoder(),td=new TextDecoder();
 const toast=t=>{const x=$('toast');x.textContent=t;x.classList.remove('hide');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.add('hide'),3000)};
 const q=(o,fn,d)=>{o._q=(o._q||Promise.resolve()).then(()=>fn(d)).catch(console.error)};
 const toBuf=async d=>d instanceof ArrayBuffer?d:(d.buffer?d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength):await new Blob([d]).arrayBuffer());
-const drain=async c=>{const dc=c.dataChannel;if(dc&&dc.bufferedAmount>BIG){dc.bufferedAmountLowThreshold=BIG/2;await new Promise(r=>{dc.onbufferedamountlow=()=>{dc.onbufferedamountlow=null;r()}})}};
+const drain=async c=>{const dc=c.dataChannel;if(dc&&dc.bufferedAmount>BIG){dc.bufferedAmountLowThreshold=BIG/2;await new Promise(r=>{const t=setTimeout(r,10000);dc.onbufferedamountlow=()=>{clearTimeout(t);dc.onbufferedamountlow=null;r()}})}};
 const P=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+
+/* ---- disk storage (OPFS) so multi-GB files never sit in RAM ---- */
+const opfs=async()=>navigator.storage.getDirectory();
+const rmFid=async f=>{try{await (await opfs()).removeEntry(f)}catch(e){}};
+const wipeOpfs=async()=>{try{const r=await opfs();for await(const [n] of r.entries())await r.removeEntry(n,{recursive:true})}catch(e){}};
+const fileOf=async o=>{if(o.blob)return o.blob;if(o.fid){try{return await (await (await opfs()).getFileHandle(o.fid)).getFile()}catch(e){}}return null};
+async function mkSink(){
+  let w=null,fid=null,root=null;
+  try{root=await opfs();fid='f'+rnd(14);const fh=await root.getFileHandle(fid,{create:true});w=await fh.createWritable()}
+  catch(e){if(fid&&root)try{await root.removeEntry(fid)}catch(x){}w=null;fid=null}
+  const s={fid,mem:w?null:[],items:[],n:0,chain:Promise.resolve(),err:0};
+  s.flush=()=>{
+    const it=s.items.sort((a,b)=>a.p-b.p);s.items=[];s.n=0;if(!it.length)return;
+    s.chain=s.chain.then(async()=>{
+      for(let i=0;i<it.length;){
+        let j=i,end=it[i].p+it[i].d.byteLength;
+        while(j+1<it.length&&it[j+1].p===end){j++;end+=it[j].d.byteLength}
+        await w.write({type:'write',position:it[i].p,data:new Blob(it.slice(i,j+1).map(x=>x.d))});i=j+1;
+      }
+    }).catch(()=>{s.err=1});
+  };
+  s.add=(idx,d)=>{if(w){s.items.push({p:idx*CH,d});s.n+=d.byteLength;if(s.n>=4194304)s.flush()}else s.mem[idx]=d};
+  s.finish=async()=>{if(!w)return new Blob(s.mem);s.flush();await s.chain;if(s.err)throw 0;await w.close()};
+  s.abort=async()=>{if(w)try{await w.abort()}catch(e){}if(fid)try{await root.removeEntry(fid)}catch(e){}};
+  return s;
+}
 
 /* ---- crypto: room secret = entry pass (mutual proof), WebRTC itself is DTLS encrypted ---- */
 let KEY;
@@ -108,7 +134,8 @@ async function dec(s){const o=unb64(s);return td.decode(await crypto.subtle.decr
 /* ---- state + IndexedDB ---- */
 let UID=lg('qs_uid');if(!UID){UID=rnd(12);lg('qs_uid',UID)}
 let NAME=cleanName(lg('qs_name')||prompt('Tumhara naam?')||'User'+Math.floor(10+Math.random()*90));lg('qs_name',NAME);
-let ROOM,SECRET,isHost,peer,conn,db,cur=null,online=new Set(),conns={},routes={},inc={},seen=new Set(),queue=[],sending=false,urls=[],LEADER=null,pend={},manualOff=false;
+let ROOM,SECRET,isHost,peer,conn,db,cur=null,online=new Set(),conns={},routes={},inc={},queue=[],sending=false,urls=[],LEADER=null,HOSTUID=null,pend={},manualOff=false,dcs={},dw={};
+const seen=new Set();
 const contacts=new Map(),xf=new Map(),GROUP={uid:'group',name:'👥 Group',up:0};
 const idb=n=>new Promise((res,rej)=>{const r=indexedDB.open(n,1);r.onupgradeneeded=()=>{r.result.createObjectStore('msgs',{keyPath:'id',autoIncrement:true}).createIndex('chat','chat');r.result.createObjectStore('contacts',{keyPath:'uid'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const tx=(s,m='readonly')=>db.transaction(s,m).objectStore(s);
@@ -125,21 +152,70 @@ const parseTok=s=>{const m=/(\d{6})-([a-z0-9]{8,})/i.exec(s||'');return m&&{room
   isHost=!t;
   if(isHost){t=parseTok(lg('qs_host'));if(!t){t={room:rnd(6,'0123456789'),secret:rnd(10)};lg('qs_host',t.room+'-'+t.secret)}}
   ROOM=t.room;SECRET=t.secret;LEADER=isHost?(lg('qs_leader_'+t.room)||UID):null;
+  if(isHost)HOSTUID=UID;
   await mkKey(ROOM,SECRET);db=await idb('qs-'+ROOM);
   for(const c of await P(tx('contacts').getAll()))if(c.uid==='group')Object.assign(GROUP,c);else contacts.set(c.uid,c);
   if(isHost&&LEADER!==UID&&!contacts.has(LEADER))LEADER=UID;renderList();isHost?startHost():startGuest();
-  setInterval(()=>{for(const k in inc)if(Date.now()-inc[k].last>120000){delete inc[k];xf.delete('i'+k)}renderXf()},30000);
+  setInterval(()=>{for(const k in inc)if(Date.now()-inc[k].last>120000)abortInc(k);renderXf()},30000);
 })();
 const setSt=(t,on)=>{$('st').textContent=t;$('st').className='bdg'+(on?' on':'')};
 const link=()=>location.origin+location.pathname+'#'+ROOM+'-'+SECRET;
+
+/* ---- DIRECT file channels (guest <-> guest, no relay through host) ---- */
+// receiver side: verify the sender knows the room secret and is a known member
+function dServe(c){
+  const st={n:rnd(16),ok:0,uid:null};
+  c.on('open',async()=>{c.send(JSON.stringify({t:'chal',n:st.n,hp:await enc(st.n)}));setTimeout(()=>{if(!st.ok)c.close()},8000)});
+  c.on('data',d=>q(st,async x=>{
+    if(typeof x==='string'){
+      if(x.length>20000)return;
+      let m;try{m=JSON.parse(x)}catch(e){return}
+      if(!st.ok){
+        if(m.t!=='hello'||!isU(m.uid)||m.uid===UID)return c.close();
+        try{const p=JSON.parse(await dec(m.proof));if(p.n!==st.n||p.uid!==m.uid)throw 0}catch(e){return c.close()}
+        const k=contacts.get(m.uid);if(!k||k.blocked)return c.close();
+        st.ok=1;st.uid=m.uid;c.send(JSON.stringify({t:'ok'}));return;
+      }
+      if(m.t==='meta'&&Number.isInteger(m.tid)&&m.tid>=0&&typeof m.name==='string'&&m.size>=0&&m.size<=MAXF){
+        await incoming({t:'meta',tid:m.tid,mid:String(m.mid||'').slice(0,20),ts:Date.now(),from:st.uid,fn:fnOf(st.uid),g:0,name:m.name,size:m.size,type:String(m.type||''),direct:1});
+        if(inc[m.tid])c.send(JSON.stringify({t:'rdy',tid:m.tid}));
+      }
+    }else if(st.ok)onChunk(await toBuf(x),st.uid);
+  },d));
+  c.on('error',()=>{});
+}
+// sender side: open one verified stripe to a peer
+function dOpen(uid){
+  return new Promise((res,rej)=>{
+    const c=peer.connect(PFX+ROOM+'-'+uid,{reliable:true,serialization:'raw',metadata:{k:'f'}});
+    const to=setTimeout(()=>{try{c.close()}catch(e){}rej(0)},7000);
+    c.on('data',d=>q(c,async x=>{
+      if(typeof x!=='string')return;let m;try{m=JSON.parse(x)}catch(e){return}
+      if(m.t==='chal'){
+        try{if(await dec(m.hp)!==m.n)throw 0}catch(e){clearTimeout(to);c.close();return rej(0)}
+        c.send(JSON.stringify({t:'hello',uid:UID,proof:await enc(JSON.stringify({n:m.n,uid:UID}))}));
+      }else if(m.t==='ok'){clearTimeout(to);res(c)}
+      else if(m.t==='rdy'&&dw[m.tid])dw[m.tid]();
+    },d));
+    c.on('close',()=>{clearTimeout(to);rej(0)});c.on('error',()=>{});
+  });
+}
+function dget(uid){
+  const p=dcs[uid];
+  if(p)return p.then(a=>a.every(c=>c.open)?a:(delete dcs[uid],dget(uid)),()=>null);
+  const np=dcs[uid]=Promise.all(Array.from({length:NS},()=>dOpen(uid)));
+  np.catch(()=>{if(dcs[uid]===np)delete dcs[uid]});
+  return np.catch(()=>null);
+}
 
 /* ---- HOST (hub) ---- */
 function startHost(){
   peer=new Peer(PFX+ROOM);
   peer.on('open',()=>setSt('● room live',1));
-  peer.on('error',e=>{if(e.type==='unavailable-id'){setSt('room busy, retry…');try{peer.destroy()}catch(x){}if(!manualOff)setTimeout(startHost,4000)}else setSt('error '+e.type)});
+  peer.on('error',e=>{if(e.type==='unavailable-id'){setSt('room busy, retry…');try{peer.destroy()}catch(x){}if(!manualOff)setTimeout(startHost,4000)}else if(e.type!=='peer-unavailable')setSt('error '+e.type)});
   peer.on('disconnected',()=>{if(!manualOff&&!peer.destroyed)try{peer.reconnect()}catch(e){}});
   peer.on('connection',c=>{
+    if(c.metadata&&c.metadata.k==='f'){dServe(c);return}
     if(Object.keys(conns).length>=30){c.close();return}
     const st={c,n:rnd(16),w:0,k:0};
     c.on('open',async()=>{c.send(JSON.stringify({t:'chal',n:st.n,hp:await enc(st.n)}));setTimeout(()=>{if(!st.ver)c.close()},8000)});
@@ -162,7 +238,7 @@ async function hostRecv(st,d){
     }
     if(st.ok)route(st.uid,m);
   }else if(st.ok){
-    const buf=await toBuf(d);if(buf.byteLength<5)return;
+    const buf=await toBuf(d);if(buf.byteLength<9)return;
     const r=routes[st.uid+':'+new DataView(buf).getUint32(0)];if(r)await fwd(r,buf);
   }
 }
@@ -202,7 +278,7 @@ function accept(st){
 }
 function pushRoster(){
   const list=[{uid:UID,name:NAME,on:1},...[...contacts.values()].filter(c=>!c.blocked).map(c=>({uid:c.uid,name:c.name,on:isOn(c.uid)?1:0}))].slice(0,100);
-  const s=JSON.stringify({t:'roster',list,leader:LEADER});
+  const s=JSON.stringify({t:'roster',list,leader:LEADER,host:UID});
   for(const u in conns)if(conns[u].ok&&conns[u].c.open)conns[u].c.send(s);
   renderList();updateHead();
 }
@@ -242,8 +318,12 @@ let rt;
 function retry(){clearTimeout(rt);try{peer.destroy()}catch(e){}if(!manualOff)rt=setTimeout(startGuest,3500)}
 function startGuest(){
   setSt('connecting…');
-  peer=new Peer();
-  peer.on('error',e=>{setSt(e.type==='peer-unavailable'?'host offline':'error '+e.type);retry()});
+  peer=new Peer(PFX+ROOM+'-'+UID);
+  peer.on('error',e=>{
+    if(e.type==='peer-unavailable'&&!String(e.message||'').trim().endsWith(PFX+ROOM))return; // a direct peer is offline, not the host
+    setSt(e.type==='peer-unavailable'?'host offline':e.type==='unavailable-id'?'purana session band ho raha…':'error '+e.type);retry();
+  });
+  peer.on('connection',c=>{if(c.metadata&&c.metadata.k==='f')dServe(c);else c.close()});
   peer.on('open',()=>{
     const c=conn=peer.connect(PFX+ROOM,{reliable:true,serialization:'raw'});let ver=false;
     c.on('data',d=>q(c,async x=>{
@@ -255,7 +335,7 @@ function startGuest(){
           c.send(JSON.stringify({t:'hello',uid:UID,name:NAME,proof:await enc(JSON.stringify({n:m.n,uid:UID}))}));setSt('host approval ka wait…');
         }else if(m.t==='ok'){ver=true;setSt('● connected',1)}
         else if(!ver)return;
-        else if(m.t==='roster'&&Array.isArray(m.list))onRoster(m.list,m.leader);
+        else if(m.t==='roster'&&Array.isArray(m.list))onRoster(m.list,m.leader,m.host);
         else if(['msg','meta','end','edit','del','lreq'].includes(m.t)){if(m.t==='end'||isU(m.from))incoming(m)}
         else if(m.t==='jreq'&&isU(m.uid))incoming(m)
         else if(m.t==='kicked'){manualOff=true;clearTimeout(rt);setSt('Leader ne room se hata diya');$('bDis').textContent='🔌 Connect'}
@@ -265,8 +345,9 @@ function startGuest(){
     c.on('error',()=>{});
   });
 }
-function onRoster(list,leader){
+function onRoster(list,leader,host){
   if(isU(leader))LEADER=leader;
+  if(isU(host))HOSTUID=host;
   const on=new Set();
   for(const e of list.slice(0,100)){
     if(!isU(e.uid)||e.uid===UID)continue;
@@ -288,24 +369,44 @@ async function incoming(m){
     if(typeof m.d!=='string'||m.d.length>8000||seen.has(m.mid))return;seen.add(m.mid);
     await saveMsg({chat,mid:m.mid,from:m.from,fn:cleanName(m.fn),k:'t',d:m.d,ts:Number(m.ts)||Date.now(),mine:0});
   }else if(m.t==='meta'){
-    if(!Number.isInteger(m.tid)||!(m.size>=0&&m.size<=MAXF)||Object.keys(inc).length>20)return;
-    inc[m.tid]={m:{...m,name:cleanFile(m.name),type:safeMime(String(m.type||''))},chat,parts:[],got:0,last:Date.now(),t:Date.now()};
-    xf.set('i'+m.tid,{l:'⬇️ '+cleanFile(m.name),p:0});renderXf();
+    if(!Number.isInteger(m.tid)||!(m.size>=0&&m.size<=MAXF)||Object.keys(inc).length>20||inc[m.tid])return;
+    const r=inc[m.tid]={m:{...m,name:cleanFile(m.name),type:safeMime(String(m.type||''))},chat,got:0,last:Date.now(),t:Date.now(),direct:!!m.direct};
+    xf.set('i'+m.tid,{l:'⬇️ '+r.m.name+(r.direct?' ⚡':''),p:0});renderXf();
+    r.sp=mkSink();
+    r.sp.then(s=>{if(s.mem&&r.m.size>1.5e9&&inc[m.tid]===r){abortInc(m.tid);toast('Itni badi file ke liye Chrome/Edge use karo')}});
+    if(!r.m.size)finalize(m.tid);
   }else if(m.t==='end'){
-    const r=inc[m.tid];if(!r)return;delete inc[m.tid];xf.delete('i'+m.tid);renderXf();
-    if(r.got!==r.m.size)return toast('Transfer adhura raha: '+r.m.name);
-    await saveMsg({chat:r.chat,mid:r.m.mid,from:r.m.from,fn:cleanName(r.m.fn),k:'f',name:r.m.name,size:r.m.size,type:r.m.type,blob:new Blob(r.parts,{type:'application/octet-stream'}),ts:Date.now(),mine:0});
+    const r=inc[m.tid];if(r&&!r.direct){abortInc(m.tid);toast('Transfer adhura raha: '+r.m.name)}
   }
 }
-function onChunk(buf){
-  if(buf.byteLength<5)return;
-  const tid=new DataView(buf).getUint32(0),r=inc[tid];if(!r)return;
-  const p=new Uint8Array(buf,4);r.got+=p.byteLength;
-  if(r.got>r.m.size){delete inc[tid];xf.delete('i'+tid);return}
-  r.parts.push(p);r.last=Date.now();
-  if(Date.now()-(r.ui||0)>200){r.ui=Date.now();xf.get('i'+tid).p=r.got/r.m.size;renderXf()}
+function abortInc(tid){
+  const r=inc[tid];if(!r)return;delete inc[tid];xf.delete('i'+tid);renderXf();
+  if(r.sp)r.sp.then(s=>s.abort()).catch(()=>{});
 }
-const renderXf=()=>{$('xf').textContent=[...xf.values()].map(x=>x.l+' '+Math.round(x.p*100)+'%').join('  ·  ')};
+async function finalize(tid){
+  const r=inc[tid];if(!r)return;delete inc[tid];
+  try{
+    const s=await r.sp,blob=await s.finish();
+    await saveMsg({chat:r.chat,mid:r.m.mid,from:r.m.from,fn:cleanName(r.m.fn),k:'f',name:r.m.name,size:r.m.size,type:r.m.type,fid:s.fid,blob,ts:Date.now(),mine:0});
+    toast('✓ '+r.m.name+' mil gayi');
+  }catch(e){toast('File save nahi hui: '+r.m.name);try{(await r.sp).abort()}catch(x){}}
+  xf.delete('i'+tid);renderXf();
+}
+function onChunk(buf,from){
+  if(buf.byteLength<9)return;
+  const dv=new DataView(buf),tid=dv.getUint32(0),r=inc[tid];if(!r)return;
+  if(from?(!r.direct||r.m.from!==from):r.direct)return;
+  const idx=dv.getUint32(4),p=new Uint8Array(buf,8);
+  r.got+=p.byteLength;
+  if(r.got>r.m.size){abortInc(tid);return}
+  r.sp.then(s=>s.add(idx,p));
+  r.last=Date.now();
+  if(r.got===r.m.size){finalize(tid);return}
+  if(Date.now()-(r.ui||0)>200){r.ui=Date.now();const x=xf.get('i'+tid);if(x){x.p=r.got/r.m.size;x.sp=r.got/Math.max(.2,(Date.now()-r.t)/1000)}renderXf()}
+}
+let wl=null;
+const wake=on=>{try{if(on&&!wl){wl=1;navigator.wakeLock&&navigator.wakeLock.request('screen').then(x=>{wl=x}).catch(()=>{wl=null})}else if(!on&&wl){if(wl.release)wl.release();wl=null}}catch(e){wl=null}};
+const renderXf=()=>{$('xf').textContent=[...xf.values()].map(x=>x.l+' '+Math.round(x.p*100)+'%'+(x.sp?' · '+fmt(x.sp)+'/s':'')).join('  ·  ');wake(xf.size>0)};
 
 async function saveMsg(o){
   o.id=await P(tx('msgs','readwrite').add(o));
@@ -348,18 +449,23 @@ function bubble(o){
   if(cur==='group'&&!o.mine)b.append(el('div','who',o.fn||'?'));
   if(o.k==='t')b.append(el('div','tx',o.d));
   else{
-    if(/^image\/(png|jpeg|gif|webp)$/.test(o.type)&&o.blob&&o.size<12e6){const im=el('img'),u=URL.createObjectURL(new Blob([o.blob],{type:o.type}));urls.push(u);im.src=u;b.append(im)}
+    if(/^image\/(png|jpeg|gif|webp)$/.test(o.type)&&o.size<12e6&&(o.blob||o.fid)){
+      const im=el('img');b.append(im);
+      fileOf(o).then(f=>{if(f){const u=URL.createObjectURL(new Blob([f],{type:o.type}));urls.push(u);im.src=u}});
+    }
     b.append(el('div',null,'📎 '+o.name+' ('+fmt(o.size)+')'));
-    const a=el('button','dl','⬇ Download');a.onclick=()=>dl(o);b.append(a);
+    if(o.blob||o.fid){const a=el('button','dl','⬇ Download');a.onclick=()=>dl(o);b.append(a)}
+    else b.append(el('div','mut','✓ bheji gayi (badi file ki copy save nahi hoti)'));
   }
   const tm=el('div','tm',(o.ed?'edited · ':'')+when(o.ts));
   if(o.mine&&o.k==='t'&&o.mid){const e=el('button','s ac','✏️');e.onclick=()=>editMsg(o);tm.append(e)}
   const x=el('button','s ac','🗑');x.onclick=()=>delMsg(o);tm.append(x);
   b.append(tm);$('msgs').append(b);$('msgs').scrollTop=1e9;
 }
-function dl(o){
+async function dl(o){
   if(/\.(exe|bat|cmd|com|scr|msi|js|jse|vbs|ps1|jar|apk|sh|lnk|hta|dll|html?|svg)$/i.test(o.name)&&!confirm('Yeh file khatarnak ho sakti hai ('+o.name+'). Phir bhi download karein?'))return;
-  const a=el('a'),u=URL.createObjectURL(new Blob([o.blob],{type:'application/octet-stream'}));a.href=u;a.download=o.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+  const f=await fileOf(o);if(!f)return toast('File nahi mili');
+  const a=el('a'),u=URL.createObjectURL(f.slice(0,f.size,'application/octet-stream'));a.href=u;a.download=o.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
 }
 
 /* ---- send ---- */
@@ -378,30 +484,52 @@ async function sendText(){
 function addFiles(fs,to){
   to=to||cur;if(!to)return;
   if(!Array.isArray(to)&&!canSend())return;
-  for(const f of fs){if(f.size>MAXF){toast(f.name+': 300MB se badi file nahi');continue}queue.push({f,to})}pump();
+  for(const f of fs){if(f.size>MAXF){toast(f.name+': 8GB se badi file nahi');continue}queue.push({f,to})}pump();
 }
 async function pump(){
   if(sending)return;sending=true;
   while(queue.length){
     const {f,to}=queue.shift(),tid=Math.floor(Math.random()*4294967296)>>>0,k='o'+tid,mid=rnd(10),tos=Array.isArray(to)?to.filter(isOn):[to];
     if(to!=='group'&&!tos.length){toast('Offline: '+f.name);continue}
-    emit({t:'meta',tid,mid,to,name:f.name,size:f.size,type:f.type});
-    const r=isHost?routes[UID+':'+tid]:null;
-    if(isHost&&(!r||!r.tg.length)){toast('Koi online nahi');continue}
-    xf.set(k,{l:'⬆️ '+f.name,p:0});let off=0,last=0;
-    while(off<f.size){
+    xf.set(k,{l:'⬆️ '+f.name,p:0});renderXf();
+    // 1-to-1 guest->guest: go direct (no host relay), striped over NS channels
+    let dc=null;
+    if(!isHost&&to!=='group'&&tos.length===1&&tos[0]!==HOSTUID){
+      xf.get(k).l='🔗 direct connect… '+f.name;renderXf();
+      dc=await dget(tos[0]);
+      if(dc){
+        try{await new Promise((res,rej)=>{dw[tid]=res;setTimeout(()=>rej(0),8000);dc[0].send(JSON.stringify({t:'meta',tid,mid,name:f.name,size:f.size,type:f.type}))})}catch(e){dc=null}
+        delete dw[tid];
+      }
+      xf.get(k).l='⬆️ '+f.name+(dc?' ⚡':' (host se)');
+    }
+    let r=null;
+    if(!dc){
+      emit({t:'meta',tid,mid,to,name:f.name,size:f.size,type:f.type});
+      r=isHost?routes[UID+':'+tid]:null;
+      if(isHost&&(!r||!r.tg.length)){toast('Koi online nahi');xf.delete(k);renderXf();continue}
+    }
+    let off=0,last=0,idx=0,bad=0;const t0=Date.now();
+    while(off<f.size&&!bad){
       const big=await f.slice(off,off+BIG).arrayBuffer();
       for(let p=0;p<big.byteLength;p+=CH){
-        const n=Math.min(CH,big.byteLength-p),u=new Uint8Array(4+n);
-        new DataView(u.buffer).setUint32(0,tid);u.set(new Uint8Array(big,p,n),4);
-        if(isHost)await fwd(r,u.buffer);else{if(!conn.open)break;await drain(conn);conn.send(u)}
+        const n=Math.min(CH,big.byteLength-p),u=new Uint8Array(8+n),dv=new DataView(u.buffer);
+        dv.setUint32(0,tid);dv.setUint32(4,idx);u.set(new Uint8Array(big,p,n),8);
+        if(isHost&&!dc)await fwd(r,u.buffer);
+        else{const c=dc?dc[idx%NS]:conn;if(!c||!c.open){bad=1;break}await drain(c);c.send(u)}
+        idx++;
       }
       off+=big.byteLength;
-      if(Date.now()-last>200){last=Date.now();xf.get(k).p=off/f.size;renderXf()}
+      if(Date.now()-last>200){last=Date.now();const x=xf.get(k);x.p=off/f.size;x.sp=off/Math.max(.2,(Date.now()-t0)/1000);renderXf()}
     }
-    if(!isHost)while(conn.open&&conn.dataChannel.bufferedAmount>0)await new Promise(x=>setTimeout(x,50));
-    emit({t:'end',tid,to});xf.delete(k);renderXf();
-    for(const c of tos)await saveMsg({chat:c,from:UID,k:'f',mid,to,name:cleanFile(f.name),size:f.size,type:safeMime(f.type),blob:f,ts:Date.now(),mine:1});
+    if(!bad){
+      const cs=dc||(isHost?[]:[conn]);
+      while(cs.some(c=>c.open&&c.dataChannel&&c.dataChannel.bufferedAmount>0))await new Promise(x=>setTimeout(x,50));
+    }
+    if(!dc)emit({t:'end',tid,to});
+    xf.delete(k);renderXf();
+    if(bad){toast('Transfer toot gaya: '+f.name);continue}
+    for(const c of tos)await saveMsg({chat:c,from:UID,k:'f',mid,to,name:cleanFile(f.name),size:f.size,type:safeMime(f.type),blob:f.size<=3e7?f:undefined,ts:Date.now(),mine:1});
   }
   sending=false;
 }
@@ -413,6 +541,7 @@ $('bAtt').onclick=()=>$('fi').click();
 $('fi').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('back').onclick=()=>{$('app').classList.remove('open');cur=null;$('cv').classList.add('hide');$('empty').classList.remove('hide');renderList()};
 $('bClr').onclick=async()=>{if(!cur||!confirm('Is chat ke saare messages is device se delete karein?'))return;
+  (await P(tx('msgs').index('chat').getAll(cur))).forEach(m=>m.fid&&rmFid(m.fid));
   await new Promise(r=>{const t=db.transaction('msgs','readwrite'),s=t.objectStore('msgs'),k=s.index('chat').openKeyCursor(IDBKeyRange.only(cur));k.onsuccess=()=>{const c=k.result;if(c){s.delete(c.primaryKey);c.continue()}};t.oncomplete=r});
   const c=cur==='group'?GROUP:contacts.get(cur);c.last='';saveContact(c);openChat(cur)};
 const mm=$('cv').parentElement;
@@ -428,7 +557,9 @@ $('bSet').onclick=()=>{$('nm').value=NAME;$('ovSet').classList.remove('hide')};
 $('nm').onchange=()=>{NAME=cleanName($('nm').value);lg('qs_name',NAME);$('me').textContent=NAME;toast('Naam save hua (agli baar join pe sab ko dikhega)')};
 $('bNew').onclick=()=>{if(confirm('Naya room banega, purane room ke log judne nahi paayenge. Pakka?')){try{L.removeItem('qs_host')}catch(e){}lg('qs_role','host');location.href=location.pathname}};
 $('bLeave').onclick=()=>{lg('qs_role','host');location.href=location.pathname};
-$('bWipe').onclick=()=>{if(confirm('Is device ke saare chats, files aur settings delete honge. Pakka?')){try{L.clear()}catch(e){}indexedDB.databases?indexedDB.databases().then(a=>Promise.all(a.map(d=>indexedDB.deleteDatabase(d.name)))).then(()=>location.href=location.pathname):location.href=location.pathname}};
+$('bWipe').onclick=async()=>{if(confirm('Is device ke saare chats, files aur settings delete honge. Pakka?')){
+  await wipeOpfs();try{L.clear()}catch(e){}
+  indexedDB.databases?indexedDB.databases().then(a=>Promise.all(a.map(d=>indexedDB.deleteDatabase(d.name)))).then(()=>location.href=location.pathname):location.href=location.pathname}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cur){const c=cur==='group'?GROUP:contacts.get(cur);if(c&&c.unread){c.unread=0;saveContact(c);renderList()}}});
 
 /* ---- edit / delete ---- */
@@ -451,11 +582,12 @@ async function delMsg(o){
     return openChat(cur);
   }
   if(!confirm('Sirf is device se delete karein?'))return;
+  if(o.fid)rmFid(o.fid);
   await P(tx('msgs','readwrite').delete(o.id));openChat(cur);
 }
 async function remoteEdit(m,chat){
   const x=await findMsg(chat,m.mid,m.from);if(!x)return;
-  if(m.t==='edit'&&x.k==='t'){x.d=m.d;x.ed=1}else if(m.t==='del'){x.k='x';x.d='';delete x.blob}else return;
+  if(m.t==='edit'&&x.k==='t'){x.d=m.d;x.ed=1}else if(m.t==='del'){if(x.fid){rmFid(x.fid);delete x.fid}x.k='x';x.d='';delete x.blob}else return;
   await putMsg(x);if(cur===chat)openChat(chat);
 }
 
@@ -463,7 +595,7 @@ async function remoteEdit(m,chat){
 function disconnect(){
   manualOff=true;clearTimeout(rt);
   try{conn&&conn.close()}catch(e){}try{peer&&peer.destroy()}catch(e){}
-  for(const u in conns)delete conns[u];online=new Set();pend={};
+  for(const u in conns)delete conns[u];for(const u in dcs)delete dcs[u];online=new Set();pend={};
   setSt('disconnected');$('bDis').textContent='🔌 Connect';renderList();updateHead();
 }
 function reconnect(){manualOff=false;$('bDis').textContent='🔌';isHost?startHost():startGuest()}
