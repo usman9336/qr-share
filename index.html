@@ -3,248 +3,380 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>QR Share</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data: blob:; connect-src https://0.peerjs.com wss://0.peerjs.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>QR Chat</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-:root{--bg1:#0f0c29;--bg2:#302b63;--bg3:#24243e;--glass:rgba(255,255,255,.08);--bd:rgba(255,255,255,.18);--tx:#f2f2ff;--mut:#b4b4d6;--ac:#7c5cff;--ac2:#00d4ff;--ok:#2ee6a6}
-@media(prefers-color-scheme:light){:root{--bg1:#e8eaff;--bg2:#d6ccff;--bg3:#c9f0ff;--glass:rgba(255,255,255,.55);--bd:rgba(255,255,255,.8);--tx:#1b1b3a;--mut:#55557a}}
+:root{--bg1:#0f0c29;--bg2:#302b63;--bg3:#24243e;--gl:rgba(255,255,255,.08);--bd:rgba(255,255,255,.16);--tx:#f2f2ff;--mut:#b4b4d6;--ac:#7c5cff;--ac2:#00d4ff;--ok:#2ee6a6}
+@media(prefers-color-scheme:light){:root{--bg1:#e8eaff;--bg2:#d6ccff;--bg3:#c9f0ff;--gl:rgba(255,255,255,.55);--bd:rgba(120,120,160,.3);--tx:#1b1b3a;--mut:#55557a}}
 *{box-sizing:border-box;margin:0}
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--tx);min-height:100vh;background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));background-attachment:fixed;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
-.wrap{max-width:900px;margin:auto;display:grid;gap:16px}
-.glass{background:var(--glass);border:1px solid var(--bd);border-radius:20px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.25)}
-h1{font-size:1.5rem;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
-h1 span.logo{background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.badge{font-size:.75rem;padding:5px 12px;border-radius:99px;background:var(--glass);border:1px solid var(--bd);color:var(--mut)}
-.badge.on{color:var(--ok);border-color:var(--ok)}
-#pair{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center}
-@media(max-width:560px){#pair{grid-template-columns:1fr;justify-items:center;text-align:center}}
-#qr{background:#fff;padding:12px;border-radius:16px;width:184px;height:184px}
-.code{font-size:2rem;letter-spacing:.3em;font-weight:700;margin:6px 0}
-.mut{color:var(--mut);font-size:.9rem}
-input,textarea,button{font:inherit;color:var(--tx)}
-input,textarea{width:100%;background:var(--glass);border:1px solid var(--bd);border-radius:12px;padding:11px 14px;outline:none}
-input:focus,textarea:focus{border-color:var(--ac)}
-button{border:0;border-radius:12px;padding:11px 18px;cursor:pointer;background:linear-gradient(90deg,var(--ac),var(--ac2));color:#fff;font-weight:600}
-button.sec{background:var(--glass);border:1px solid var(--bd);color:var(--tx)}
-.row{display:flex;gap:8px;margin-top:10px}
-#users{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
-.chip{padding:7px 14px;border-radius:99px;border:1px solid var(--bd);background:var(--glass);cursor:pointer;font-size:.85rem;user-select:none}
-.chip.sel{background:linear-gradient(90deg,var(--ac),var(--ac2));color:#fff;border-color:transparent}
-#drop{border:2px dashed var(--bd);border-radius:16px;padding:24px;text-align:center;cursor:pointer;color:var(--mut);transition:.2s}
-#drop.hot{border-color:var(--ac2);background:var(--glass);color:var(--tx)}
-#log{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;margin-top:14px}
-.m{max-width:85%;padding:10px 14px;border-radius:14px;background:var(--glass);border:1px solid var(--bd);word-break:break-word;font-size:.95rem}
-.m.me{align-self:flex-end;background:linear-gradient(90deg,rgba(124,92,255,.5),rgba(0,212,255,.4))}
-.m small{display:block;color:var(--mut);margin-top:4px;font-size:.75rem}
-.m .who{margin:0 0 4px;font-weight:600}
-.bar{height:6px;border-radius:9px;background:var(--bd);margin-top:8px;overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2))}
-.m a{color:var(--ac2);font-weight:600}
-.m .cp{background:none;border:0;padding:0 0 0 8px;color:var(--ac2);font-size:.75rem;font-weight:600}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--tx);background:linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));background-attachment:fixed;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+#app{height:100dvh;max-width:1100px;margin:auto;display:grid;grid-template-columns:330px 1fr;gap:12px;padding:12px}
+.gl{background:var(--gl);border:1px solid var(--bd);border-radius:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 8px 32px rgba(0,0,0,.25);min-height:0}
+aside,main{display:flex;flex-direction:column;overflow:hidden}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--bd)}
+.hd b{display:block}.mut{color:var(--mut);font-size:.8rem}
+.bdg{font-size:.7rem;color:var(--mut)}.bdg.on{color:var(--ok)}
+button,input,textarea{font:inherit;color:var(--tx)}
+button{border:0;border-radius:10px;padding:8px 12px;cursor:pointer;background:linear-gradient(90deg,var(--ac),var(--ac2));color:#fff;font-weight:600}
+button.s{background:var(--gl);border:1px solid var(--bd);color:var(--tx)}
+input,textarea{width:100%;background:var(--gl);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none;resize:none}
+#list{overflow-y:auto;flex:1}
+.ci{display:flex;gap:10px;align-items:center;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--bd)}
+.ci:hover,.ci.act{background:var(--gl)}
+.av{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;position:relative}
+.av i{position:absolute;right:0;bottom:0;width:11px;height:11px;border-radius:50%;background:#8888a8;border:2px solid var(--bg2)}
+.av i.on{background:var(--ok)}
+.ci .t{flex:1;min-width:0}.ci .t div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci .t .mut{font-size:.78rem}
+.un{background:var(--ok);color:#042;border-radius:99px;font-size:.72rem;font-weight:700;padding:2px 8px}
+#appr div{padding:10px 14px;background:rgba(255,200,0,.15);border-bottom:1px solid var(--bd);display:flex;gap:6px;align-items:center;font-size:.85rem}
+#appr span{flex:1}
+#empty{margin:auto;text-align:center;color:var(--mut);padding:20px}
+#cv{display:flex;flex-direction:column;flex:1;min-height:0}
+#msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:80%;align-self:flex-start;padding:8px 12px;border-radius:14px;background:var(--gl);border:1px solid var(--bd);word-break:break-word}
+.b.me{align-self:flex-end;background:linear-gradient(90deg,rgba(124,92,255,.55),rgba(0,212,255,.4))}
+.b .who{font-size:.75rem;font-weight:700;color:var(--ac2)}
+.b .tx{white-space:pre-wrap}.b .tm{font-size:.68rem;color:var(--mut);text-align:right;margin-top:2px}
+.b img{max-width:100%;max-height:260px;border-radius:10px;display:block;margin-bottom:6px}
+.b .dl{margin-top:6px;padding:5px 10px;font-size:.8rem}
+#xf{font-size:.78rem;color:var(--mut);padding:0 14px}
+.cm{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--bd);align-items:flex-end}
 .hide{display:none!important}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:9;padding:16px}
+.ov>div{width:min(380px,100%);padding:18px;display:grid;gap:10px;background:var(--bg2);text-align:center}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 16px;border-radius:99px;z-index:20;font-size:.85rem}
+#back{display:none}
+@media(max-width:720px){#app{grid-template-columns:1fr;padding:0;gap:0}.gl{border-radius:0}main{display:none}#app.open aside{display:none}#app.open main{display:flex}#back{display:inline-block}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="glass"><h1><span class="logo">⚡ QR Share</span><span id="st" class="badge">connecting…</span></h1></div>
-
-  <div class="glass" id="pair">
-    <div id="qr"></div>
-    <div>
-      <div class="mut">Sab log QR scan karke ya code daalke judo</div>
-      <div class="code" id="code">······</div>
-      <input id="nm" maxlength="20" placeholder="Tumhara naam">
-      <div class="row"><input id="join" inputmode="numeric" maxlength="6" placeholder="Dusre ka 6-digit code"><button id="jb" class="sec">Join</button></div>
-      <div class="row"><button id="cl" class="sec">🔗 Link copy</button></div>
-    </div>
+<div id="app">
+ <aside class="gl">
+  <div class="hd"><div><b id="me"></b><span class="bdg" id="st">…</span></div><div><button class="s" id="bInv">📲</button> <button class="s" id="bSet">⚙️</button></div></div>
+  <div id="appr"></div>
+  <div id="list"></div>
+ </aside>
+ <main class="gl">
+  <div id="empty">💬<br>Left side se kisi ko chuno ya Group kholo.<br><span class="mut">📲 se QR dikhake naye log jodo.</span></div>
+  <div id="cv" class="hide">
+   <div class="hd"><div style="display:flex;gap:8px;align-items:center"><button class="s" id="back">←</button><div><b id="hn"></b><span class="bdg" id="hs"></span></div></div><button class="s" id="bClr">🗑</button></div>
+   <div id="msgs"></div><div id="xf"></div>
+   <div class="cm"><button class="s" id="bAtt">📎</button><input type="file" id="fi" multiple hidden><textarea id="tx" rows="1" placeholder="Message likho…"></textarea><button id="sb">Send</button></div>
   </div>
-
-  <div class="glass hide" id="app">
-    <div class="mut" style="margin-bottom:8px">Kisko bhejna hai (tap karke chuno):</div>
-    <div id="users"></div>
-    <div id="drop">📁 File yahan drop karo ya tap karke chuno (multiple chalegi)<input type="file" id="fi" multiple hidden></div>
-    <div id="log"></div>
-    <div class="row"><textarea id="tx" rows="2" placeholder="Message likho… (Enter = send, Shift+Enter = new line)"></textarea><button id="sb">Send</button></div>
-  </div>
+ </main>
 </div>
-
+<div class="ov hide" id="ovInv"><div class="gl"><b>Room me jodo</b><div id="qr" style="background:#fff;padding:10px;border-radius:12px;justify-self:center"></div><input id="lnk" readonly><button id="cpy">🔗 Link copy</button><span class="mut">Sirf unhe do jinhe judne dena hai. Naye banda ko host Allow karega.</span><button class="s" data-x>Band karo</button></div></div>
+<div class="ov hide" id="ovSet"><div class="gl"><b>Settings</b><input id="nm" maxlength="20" placeholder="Tumhara naam"><button class="s" id="bNew">Naya room banao</button><button class="s" id="bLeave">Room chhodo (host ban jao)</button><button class="s" id="bWipe">Saara local data delete</button><button class="s" data-x>Band karo</button></div></div>
+<div id="toast" class="hide"></div>
 <script>
-const $=id=>document.getElementById(id);
-const CH=65536,BIG=8388608,PFX='qrshare-';
-let peer,conn,isHost=false,myId='',conns={},names={},peers=[],deSel=new Set(),inc={},routes={},queue=[],sending=false;
+const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=65536,BIG=8388608,MAXF=314572800;
+const lg=(k,v)=>{try{return v===undefined?L.getItem(k):L.setItem(k,v)}catch(e){return null}};
+const rnd=(n,al='abcdefghjkmnpqrstuvwxyz23456789')=>Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>al[b%al.length]).join('');
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const rid=()=>String(Math.floor(100000+Math.random()*900000));
-const hash=()=>location.hash.replace('#','').trim();
-const setSt=(t,on)=>{$('st').textContent=t;$('st').classList.toggle('on',!!on)};
-try{$('nm').value=localStorage.getItem('qs_name')||''}catch(e){}
-if(!$('nm').value)$('nm').value='User'+Math.floor(10+Math.random()*90);
-$('nm').oninput=()=>{try{localStorage.setItem('qs_name',$('nm').value)}catch(e){}if(isHost)pushPeers()};
-const myName=()=>($('nm').value.trim()||'User').slice(0,20);
-const q=(c,fn,d)=>{c._q=(c._q||Promise.resolve()).then(()=>fn(d)).catch(console.error)};
+const cleanName=s=>String(s||'').replace(/[\u0000-\u001f\u007f<>]/g,'').trim().slice(0,20)||'User';
+const cleanFile=s=>String(s||'').replace(/[\u0000-\u001f<>:"\/\\|?*]+/g,'_').replace(/^\.+/,'').slice(0,120)||'file';
+const safeMime=t=>/^image\/(png|jpeg|gif|webp)$/.test(t)?t:'application/octet-stream';
+const UIDRE=/^[a-z0-9]{12}$/,isU=u=>typeof u==='string'&&UIDRE.test(u);
+const te=new TextEncoder(),td=new TextDecoder();
+const toast=t=>{const x=$('toast');x.textContent=t;x.classList.remove('hide');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.add('hide'),3000)};
+const q=(o,fn,d)=>{o._q=(o._q||Promise.resolve()).then(()=>fn(d)).catch(console.error)};
 const toBuf=async d=>d instanceof ArrayBuffer?d:(d.buffer?d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength):await new Blob([d]).arrayBuffer());
 const drain=async c=>{const dc=c.dataChannel;if(dc&&dc.bufferedAmount>BIG){dc.bufferedAmountLowThreshold=BIG/2;await new Promise(r=>{dc.onbufferedamountlow=()=>{dc.onbufferedamountlow=null;r()}})}};
+const P=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 
-function showQR(id){
-  const url=location.origin+location.pathname+'#'+id;
-  $('code').textContent=id;$('qr').innerHTML='';
-  try{new QRCode($('qr'),{text:url,width:160,height:160,correctLevel:QRCode.CorrectLevel.M})}catch(e){}
-  $('cl').onclick=()=>navigator.clipboard.writeText(url).then(()=>{$('cl').textContent='✓ Copied';setTimeout(()=>$('cl').textContent='🔗 Link copy',1500)});
-}
+/* ---- crypto: room secret = entry pass (mutual proof), WebRTC itself is DTLS encrypted ---- */
+let KEY;
+const b64=u=>{let s='';u.forEach(b=>s+=String.fromCharCode(b));return btoa(s)},unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function mkKey(room,secret){const k=await crypto.subtle.importKey('raw',te.encode(secret),'PBKDF2',false,['deriveKey']);KEY=await crypto.subtle.deriveKey({name:'PBKDF2',salt:te.encode('qs:'+room),iterations:100000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function enc(s){const iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},KEY,te.encode(s))),o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
+async function dec(s){const o=unb64(s);return td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:o.slice(0,12)},KEY,o.slice(12)))}
 
-/* ---------- HOST (hub) ---------- */
-function host(){
-  isHost=true;myId='host';showQR(rid_=rid());setSt('● room live',true);$('app').classList.remove('hide');
-  peer=new Peer(PFX+rid_);
-  peer.on('error',e=>{if(e.type==='unavailable-id')host();else setSt('error: '+e.type)});
+/* ---- state + IndexedDB ---- */
+let UID=lg('qs_uid');if(!UID){UID=rnd(12);lg('qs_uid',UID)}
+let NAME=cleanName(lg('qs_name')||prompt('Tumhara naam?')||'User'+Math.floor(10+Math.random()*90));lg('qs_name',NAME);
+let ROOM,SECRET,isHost,peer,conn,db,cur=null,online=new Set(),conns={},routes={},inc={},seen=new Set(),queue=[],sending=false,urls=[];
+const contacts=new Map(),xf=new Map(),GROUP={uid:'group',name:'👥 Group',up:0};
+const idb=n=>new Promise((res,rej)=>{const r=indexedDB.open(n,1);r.onupgradeneeded=()=>{r.result.createObjectStore('msgs',{keyPath:'id',autoIncrement:true}).createIndex('chat','chat');r.result.createObjectStore('contacts',{keyPath:'uid'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const tx=(s,m='readonly')=>db.transaction(s,m).objectStore(s);
+const saveContact=c=>{const{...o}=c;P(tx('contacts','readwrite').put(o)).catch(()=>{})};
+const isOn=u=>u==='group'?false:isHost?!!(conns[u]&&conns[u].ok):online.has(u);
+const parseTok=s=>{const m=/(\d{6})-([a-z0-9]{8,})/i.exec(s||'');return m&&{room:m[1],secret:m[2]}};
+
+(async()=>{
+  navigator.storage&&navigator.storage.persist&&navigator.storage.persist();
+  $('me').textContent=NAME;
+  let t=parseTok(location.hash.slice(1));
+  if(t){lg('qs_join',t.room+'-'+t.secret);lg('qs_role','guest');history.replaceState(null,'',location.pathname)}
+  else if(lg('qs_role')==='guest')t=parseTok(lg('qs_join'));
+  isHost=!t;
+  if(isHost){t=parseTok(lg('qs_host'));if(!t){t={room:rnd(6,'0123456789'),secret:rnd(10)};lg('qs_host',t.room+'-'+t.secret)}}
+  ROOM=t.room;SECRET=t.secret;
+  await mkKey(ROOM,SECRET);db=await idb('qs-'+ROOM);
+  for(const c of await P(tx('contacts').getAll()))if(c.uid==='group')Object.assign(GROUP,c);else contacts.set(c.uid,c);
+  renderList();isHost?startHost():startGuest();
+  setInterval(()=>{for(const k in inc)if(Date.now()-inc[k].last>120000){delete inc[k];xf.delete('i'+k)}renderXf()},30000);
+})();
+const setSt=(t,on)=>{$('st').textContent=t;$('st').className='bdg'+(on?' on':'')};
+const link=()=>location.origin+location.pathname+'#'+ROOM+'-'+SECRET;
+
+/* ---- HOST (hub) ---- */
+function startHost(){
+  peer=new Peer(PFX+ROOM);
+  peer.on('open',()=>setSt('● room live',1));
+  peer.on('error',e=>{if(e.type==='unavailable-id'){setSt('room busy, retry…');try{peer.destroy()}catch(x){}setTimeout(startHost,4000)}else setSt('error '+e.type)});
+  peer.on('disconnected',()=>peer.reconnect());
   peer.on('connection',c=>{
-    conns[c.peer]=c;
-    c.on('data',d=>q(c,x=>hostRecv(c.peer,x),d));
-    c.on('close',()=>{const n=names[c.peer];delete conns[c.peer];delete names[c.peer];if(n)sys(esc(n)+' chala gaya');pushPeers()});
+    if(Object.keys(conns).length>=30){c.close();return}
+    const st={c,n:rnd(16),w:0,k:0};
+    c.on('open',async()=>{c.send(JSON.stringify({t:'chal',n:st.n,hp:await enc(st.n)}));setTimeout(()=>{if(!st.ver)c.close()},8000)});
+    c.on('data',d=>q(st,x=>hostRecv(st,x),d));
+    c.on('close',()=>{if(st.row)st.row.remove();for(const k in routes)if(routes[k].from===st.uid)delete routes[k];if(st.uid&&conns[st.uid]===st){delete conns[st.uid];pushRoster()}});
     c.on('error',()=>{});
   });
-  pushPeers();
 }
-let rid_;
-function pushPeers(){
-  peers=[{id:'host',name:myName()},...Object.keys(conns).filter(k=>names[k]).map(k=>({id:k,name:names[k]}))];
-  const s=JSON.stringify({t:'peers',list:peers});
-  Object.values(conns).forEach(c=>c.open&&c.send(s));
-  renderUsers();
-}
-async function hostRecv(from,d){
+async function hostRecv(st,d){
+  const c=st.c;
   if(typeof d==='string'){
-    const m=JSON.parse(d);
-    if(m.t==='hello'){names[from]=(m.name||'User').slice(0,20);sys(esc(names[from])+' join hua 🎉');pushPeers();return}
-    const ids=m.to||[];
-    if(m.t==='meta')routes[m.tid]=ids;
-    const out=JSON.stringify({...m,to:undefined,from,fn:names[from]});
-    for(const id of ids){
-      if(id==='host')deliver({...m,from,fn:names[from]});
-      else if(conns[id]&&conns[id].open)conns[id].send(out);
+    const now=Date.now();if(now-st.w>1000){st.w=now;st.k=0}if(++st.k>60||d.length>20000)return c.close();
+    let m;try{m=JSON.parse(d)}catch(e){return}
+    if(!st.ver){
+      if(m.t!=='hello'||!isU(m.uid)||m.uid===UID)return c.close();
+      try{const p=JSON.parse(await dec(m.proof));if(p.n!==st.n||p.uid!==m.uid)throw 0}catch(e){return c.close()}
+      const ex=contacts.get(m.uid);if(ex&&ex.blocked)return c.close();
+      st.ver=1;st.uid=m.uid;st.name=cleanName(m.name);
+      ex?accept(st):askApproval(st);return;
     }
-    if(m.t==='end')delete routes[m.tid];
-  }else{
-    const buf=await toBuf(d),tid=new DataView(buf).getUint32(0);
-    for(const id of routes[tid]||[]){
-      if(id==='host')deliverChunk(buf);
-      else if(conns[id]&&conns[id].open){await drain(conns[id]);conns[id].send(buf)}
-    }
+    if(st.ok)route(st.uid,m);
+  }else if(st.ok){
+    const buf=await toBuf(d);if(buf.byteLength<5)return;
+    const r=routes[st.uid+':'+new DataView(buf).getUint32(0)];if(r)await fwd(r,buf);
   }
 }
+function askApproval(st){
+  const row=el('div'),s=el('span',null,st.name+' judna chahta hai'),a=el('button',null,'Allow'),b=el('button','s','Block');
+  row.append(s,a,b);$('appr').append(row);st.row=row;
+  a.onclick=()=>{row.remove();st.row=null;accept(st)};
+  b.onclick=()=>{row.remove();st.row=null;contacts.set(st.uid,{uid:st.uid,name:st.name,blocked:1,up:0});saveContact(contacts.get(st.uid));st.c.close()};
+}
+function accept(st){
+  const old=conns[st.uid];if(old&&old!==st){old.ok=0;old.c.close()}
+  st.ok=1;conns[st.uid]=st;
+  const c=contacts.get(st.uid)||{uid:st.uid};c.name=st.name;c.up=Date.now();contacts.set(st.uid,c);saveContact(c);
+  st.c.send(JSON.stringify({t:'ok'}));pushRoster();
+}
+function pushRoster(){
+  const list=[{uid:UID,name:NAME,on:1},...[...contacts.values()].filter(c=>!c.blocked).map(c=>({uid:c.uid,name:c.name,on:isOn(c.uid)?1:0}))].slice(0,100);
+  const s=JSON.stringify({t:'roster',list});
+  for(const u in conns)if(conns[u].ok&&conns[u].c.open)conns[u].c.send(s);
+  renderList();updateHead();
+}
+const fnOf=u=>u===UID?NAME:(contacts.get(u)||{}).name||'?';
+const targetsOf=(from,to)=>to==='group'?[...[...contacts.values()].filter(c=>!c.blocked).map(c=>c.uid),UID].filter(u=>u!==from):(to===UID||(contacts.has(to)&&!contacts.get(to).blocked))&&to!==from?[to]:[];
+function sendTo(u,o){if(u===UID)incoming(o);else{const s=conns[u];if(s&&s.ok&&s.c.open)s.c.send(JSON.stringify(o))}}
+function route(from,m){
+  const g=m.to==='group'?1:0;
+  if(m.t==='msg'){
+    if(typeof m.d!=='string'||!m.d||m.d.length>8000)return;
+    const o={t:'msg',mid:String(m.mid||rnd(10)).slice(0,20),ts:Date.now(),from,fn:fnOf(from),g,d:m.d};
+    targetsOf(from,m.to).forEach(u=>sendTo(u,o));
+  }else if(m.t==='meta'){
+    if(!Number.isInteger(m.tid)||m.tid<0||m.tid>4294967295||typeof m.name!=='string'||!(m.size>=0&&m.size<=MAXF))return;
+    const tg=targetsOf(from,m.to).filter(u=>u===UID||(conns[u]&&conns[u].ok));
+    routes[from+':'+m.tid]={from,tg};
+    const o={t:'meta',tid:m.tid,ts:Date.now(),from,fn:fnOf(from),g,name:cleanFile(m.name),size:m.size,type:safeMime(String(m.type||''))};
+    tg.forEach(u=>sendTo(u,o));
+  }else if(m.t==='end'){
+    const r=routes[from+':'+m.tid];if(!r)return;
+    r.tg.forEach(u=>sendTo(u,{t:'end',tid:m.tid}));delete routes[from+':'+m.tid];
+  }
+}
+async function fwd(r,buf){for(const u of r.tg){if(u===UID)onChunk(buf);else{const s=conns[u];if(s&&s.ok&&s.c.open){await drain(s.c);s.c.send(buf)}}}}
 
-/* ---------- GUEST ---------- */
-function guest(id){
-  $('code').textContent=id;$('qr').innerHTML='<div style="color:#333;font-size:.8rem;padding:60px 8px;text-align:center">Joining…</div>';
+/* ---- GUEST ---- */
+let rt;
+function retry(){clearTimeout(rt);try{peer.destroy()}catch(e){}rt=setTimeout(startGuest,3500)}
+function startGuest(){
   setSt('connecting…');
   peer=new Peer();
-  peer.on('error',e=>setSt(e.type==='peer-unavailable'?'code galat / host offline':'error: '+e.type));
-  peer.on('open',pid=>{
-    myId=pid;conn=peer.connect(PFX+id,{reliable:true,serialization:'raw'});
-    conn.on('open',()=>{conn.send(JSON.stringify({t:'hello',name:myName()}));setSt('● connected',true);$('pair').classList.add('hide');$('app').classList.remove('hide')});
-    conn.on('data',d=>q(conn,guestRecv,d));
-    conn.on('close',()=>{setSt('host disconnected');sys('Room band ho gaya');$('sb').disabled=true});
-    conn.on('error',()=>{});
+  peer.on('error',e=>{setSt(e.type==='peer-unavailable'?'host offline':'error '+e.type);retry()});
+  peer.on('open',()=>{
+    const c=conn=peer.connect(PFX+ROOM,{reliable:true,serialization:'raw'});let ver=false;
+    c.on('data',d=>q(c,async x=>{
+      if(typeof x==='string'){
+        if(x.length>30000)return;
+        let m;try{m=JSON.parse(x)}catch(e){return}
+        if(m.t==='chal'){
+          try{if(await dec(m.hp)!==m.n)throw 0}catch(e){setSt('⚠ galat host');clearTimeout(rt);c.close();return}
+          c.send(JSON.stringify({t:'hello',uid:UID,name:NAME,proof:await enc(JSON.stringify({n:m.n,uid:UID}))}));setSt('host approval ka wait…');
+        }else if(m.t==='ok'){ver=true;setSt('● connected',1)}
+        else if(!ver)return;
+        else if(m.t==='roster'&&Array.isArray(m.list))onRoster(m.list);
+        else if(m.t==='msg'||m.t==='meta'||m.t==='end'){if(m.t==='end'||isU(m.from))incoming(m)}
+      }else if(ver)onChunk(await toBuf(x));
+    },d));
+    c.on('close',()=>{online=new Set();renderList();updateHead();setSt('disconnected');if(c===conn)retry()});
+    c.on('error',()=>{});
   });
 }
-async function guestRecv(d){
-  if(typeof d==='string'){
-    const m=JSON.parse(d);
-    if(m.t==='peers'){peers=m.list;renderUsers()}else deliver(m);
-  }else deliverChunk(await toBuf(d));
+function onRoster(list){
+  const on=new Set();
+  for(const e of list.slice(0,100)){
+    if(!isU(e.uid)||e.uid===UID)continue;
+    let c=contacts.get(e.uid);if(!c){c={uid:e.uid,up:Date.now()};contacts.set(e.uid,c)}
+    c.name=cleanName(e.name);if(e.on){on.add(e.uid);if(!online.has(e.uid))c.up=Date.now()}saveContact(c);
+  }
+  online=on;renderList();updateHead();
 }
 
-/* ---------- UI / receive ---------- */
-function sys(h){const d=document.createElement('div');d.className='m';d.style.cssText='align-self:center;color:var(--mut)';d.innerHTML=h;$('log').appendChild(d);$('log').scrollTop=1e9}
-function add(html,me){const d=document.createElement('div');d.className='m'+(me?' me':'');d.innerHTML=html;$('log').appendChild(d);$('log').scrollTop=1e9;return d}
-const others=()=>peers.filter(p=>p.id!==myId);
-const targets=()=>others().filter(p=>!deSel.has(p.id)).map(p=>p.id);
-const nameOf=id=>(peers.find(p=>p.id===id)||{}).name||'?';
-function renderUsers(){
-  const o=others(),u=$('users');u.innerHTML='';
-  if(peers.length)setSt('● '+peers.length+' user'+(peers.length>1?'s':'')+' online',true);
-  if(!o.length){u.innerHTML='<span class="mut">Abhi koi aur nahi juda. QR share karo 👆</span>';return}
-  const all=document.createElement('div');all.className='chip'+(deSel.size===0?' sel':'');all.textContent='👥 Sabko';
-  all.onclick=()=>{deSel.clear();renderUsers()};u.appendChild(all);
-  o.forEach(p=>{const c=document.createElement('div');c.className='chip'+(deSel.has(p.id)?'':' sel');c.textContent=p.name;
-    c.onclick=()=>{deSel.has(p.id)?deSel.delete(p.id):deSel.add(p.id);renderUsers()};u.appendChild(c)});
-}
-function textMsg(t,me,who){
-  const d=add(`<small class="who">${esc(who)}</small>`+esc(t).replace(/\n/g,'<br>')+'<button class="cp">copy</button>',me);
-  d.querySelector('.cp').onclick=e=>{navigator.clipboard.writeText(t);e.target.textContent='✓'};
-}
-function deliver(m){
-  if(m.t==='text')textMsg(m.d,false,m.fn);
-  else if(m.t==='meta'){
-    const el=add(`<small class="who">${esc(m.fn)}</small>⬇️ <b>${esc(m.name)}</b> (${fmt(m.size)})<div class="bar"><i></i></div><small>receiving…</small>`,false);
-    inc[m.tid]={m,parts:[],got:0,el,t0:Date.now(),last:0};
-  }else if(m.t==='end'&&inc[m.tid]){
-    const r=inc[m.tid];delete inc[m.tid];
-    const url=URL.createObjectURL(new Blob(r.parts,{type:r.m.type||'application/octet-stream'}));
-    r.el.querySelector('small:last-child').innerHTML=`<a href="${url}" download="${esc(r.m.name)}">Download karo</a>`;
-    r.el.querySelector('i').style.width='100%';
+/* ---- receive ---- */
+async function incoming(m){
+  const chat=m.g?'group':m.from;
+  if(m.t==='msg'){
+    if(typeof m.d!=='string'||m.d.length>8000||seen.has(m.mid))return;seen.add(m.mid);
+    await saveMsg({chat,from:m.from,fn:cleanName(m.fn),k:'t',d:m.d,ts:Number(m.ts)||Date.now(),mine:0});
+  }else if(m.t==='meta'){
+    if(!Number.isInteger(m.tid)||!(m.size>=0&&m.size<=MAXF)||Object.keys(inc).length>20)return;
+    inc[m.tid]={m:{...m,name:cleanFile(m.name),type:safeMime(String(m.type||''))},chat,parts:[],got:0,last:Date.now(),t:Date.now()};
+    xf.set('i'+m.tid,{l:'⬇️ '+cleanFile(m.name),p:0});renderXf();
+  }else if(m.t==='end'){
+    const r=inc[m.tid];if(!r)return;delete inc[m.tid];xf.delete('i'+m.tid);renderXf();
+    if(r.got!==r.m.size)return toast('Transfer adhura raha: '+r.m.name);
+    await saveMsg({chat:r.chat,from:r.m.from,fn:cleanName(r.m.fn),k:'f',name:r.m.name,size:r.m.size,type:r.m.type,blob:new Blob(r.parts,{type:'application/octet-stream'}),ts:Date.now(),mine:0});
   }
 }
-function deliverChunk(buf){
-  const r=inc[new DataView(buf).getUint32(0)];if(!r)return;
-  const p=new Uint8Array(buf,4);r.parts.push(p);r.got+=p.byteLength;
-  if(Date.now()-r.last>150){r.last=Date.now();
-    const pc=r.got/r.m.size*100;
-    r.el.querySelector('i').style.width=pc+'%';
-    r.el.querySelector('small:last-child').textContent=`${pc.toFixed(0)}% · ${fmt(r.got/((Date.now()-r.t0)/1000||1))}/s`;}
+function onChunk(buf){
+  if(buf.byteLength<5)return;
+  const tid=new DataView(buf).getUint32(0),r=inc[tid];if(!r)return;
+  const p=new Uint8Array(buf,4);r.got+=p.byteLength;
+  if(r.got>r.m.size){delete inc[tid];xf.delete('i'+tid);return}
+  r.parts.push(p);r.last=Date.now();
+  if(Date.now()-(r.ui||0)>200){r.ui=Date.now();xf.get('i'+tid).p=r.got/r.m.size;renderXf()}
+}
+const renderXf=()=>{$('xf').textContent=[...xf.values()].map(x=>x.l+' '+Math.round(x.p*100)+'%').join('  ·  ')};
+
+async function saveMsg(o){
+  o.id=await P(tx('msgs','readwrite').add(o));
+  let c=o.chat==='group'?GROUP:contacts.get(o.chat);
+  if(!c){c={uid:o.chat,name:o.fn||'?',up:0};contacts.set(o.chat,c)}
+  c.up=Date.now();c.last=o.k==='t'?o.d.slice(0,50):'📎 '+o.name;
+  if(!o.mine&&(cur!==o.chat||document.hidden))c.unread=(c.unread||0)+1;
+  saveContact(c);if(cur===o.chat)bubble(o);renderList();
 }
 
-/* ---------- send ---------- */
-function emit(m){
-  if(isHost){const s=JSON.stringify({...m,to:undefined,from:'host',fn:myName()});m.to.forEach(id=>conns[id]&&conns[id].open&&conns[id].send(s))}
-  else conn.send(JSON.stringify(m));
+/* ---- UI ---- */
+const when=ts=>{const d=new Date(ts),t=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?t:d.toLocaleDateString([],{day:'numeric',month:'short'})+' '+t};
+function renderList(){
+  const L2=$('list');L2.innerHTML='';
+  const rows=[GROUP,...[...contacts.values()].filter(c=>!c.blocked).sort((a,b)=>(isOn(b.uid)-isOn(a.uid))||((b.up||0)-(a.up||0)))];
+  for(const c of rows){
+    const d=el('div','ci'+(cur===c.uid?' act':'')),av=el('div','av',c.uid==='group'?'👥':c.name[0].toUpperCase()),t=el('div','t');
+    if(c.uid!=='group')av.append(el('i',isOn(c.uid)?'on':''));
+    t.append(el('div',null,c.name),el('div','mut',c.last||(c.uid==='group'?'Sabke saath chat':isOn(c.uid)?'online':'offline')));
+    d.append(av,t);if(c.unread)d.append(el('span','un',c.unread));
+    d.onclick=()=>openChat(c.uid);L2.append(d);
+  }
 }
-const whoStr=ids=>'→ '+(deSel.size===0?'Sabko':ids.map(nameOf).join(', '));
-function sendText(){
-  const t=$('tx').value.trim();if(!t)return;
-  const ids=targets();if(!ids.length){sys('Pehle kisi ko select karo');return}
-  emit({t:'text',d:t,to:ids});textMsg(t,true,whoStr(ids));$('tx').value='';
+function updateHead(){
+  if(!cur)return;const c=cur==='group'?GROUP:contacts.get(cur);if(!c)return;
+  $('hn').textContent=c.name;
+  $('hs').textContent=' '+(cur==='group'?[...contacts.values()].filter(x=>isOn(x.uid)).length+' online':isOn(cur)?'● online':'offline');
+}
+async function openChat(u){
+  cur=u;const c=u==='group'?GROUP:contacts.get(u);if(!c)return;c.unread=0;saveContact(c);
+  $('app').classList.add('open');$('empty').classList.add('hide');$('cv').classList.remove('hide');
+  urls.forEach(URL.revokeObjectURL);urls=[];$('msgs').innerHTML='';updateHead();renderList();
+  const all=await P(tx('msgs').index('chat').getAll(u));if(cur!==u)return;
+  all.slice(-300).forEach(bubble);
+}
+function bubble(o){
+  const b=el('div','b'+(o.mine?' me':''));
+  if(cur==='group'&&!o.mine)b.append(el('div','who',o.fn||'?'));
+  if(o.k==='t')b.append(el('div','tx',o.d));
+  else{
+    if(/^image\/(png|jpeg|gif|webp)$/.test(o.type)&&o.blob&&o.size<12e6){const im=el('img'),u=URL.createObjectURL(new Blob([o.blob],{type:o.type}));urls.push(u);im.src=u;b.append(im)}
+    b.append(el('div',null,'📎 '+o.name+' ('+fmt(o.size)+')'));
+    const a=el('button','dl','⬇ Download');a.onclick=()=>dl(o);b.append(a);
+  }
+  b.append(el('div','tm',when(o.ts)));$('msgs').append(b);$('msgs').scrollTop=1e9;
+}
+function dl(o){
+  if(/\.(exe|bat|cmd|com|scr|msi|js|jse|vbs|ps1|jar|apk|sh|lnk|hta|dll|html?|svg)$/i.test(o.name)&&!confirm('Yeh file khatarnak ho sakti hai ('+o.name+'). Phir bhi download karein?'))return;
+  const a=el('a'),u=URL.createObjectURL(new Blob([o.blob],{type:'application/octet-stream'}));a.href=u;a.download=o.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+
+/* ---- send ---- */
+function emit(m){isHost?route(UID,m):conn&&conn.open?conn.send(JSON.stringify(m)):toast('Connected nahi ho')}
+function canSend(){
+  if(!isHost&&!(conn&&conn.open))return toast('Connected nahi ho'),false;
+  if(cur!=='group'&&!isOn(cur)){toast(fnOf(cur)+' offline hai, abhi bhej nahi sakte');return false}
+  return true;
+}
+async function sendText(){
+  const d=$('tx').value.trim();if(!d||!cur||!canSend())return;
+  if(d.length>8000)return toast('Message bahut lamba hai');
+  const mid=rnd(10);$('tx').value='';
+  emit({t:'msg',mid,to:cur,d});await saveMsg({chat:cur,from:UID,k:'t',d,ts:Date.now(),mine:1});
 }
 function addFiles(fs){
-  const ids=targets();if(!ids.length){sys('Pehle kisi ko select karo');return}
-  for(const f of fs)queue.push({f,ids,w:whoStr(ids)});pump();
+  if(!cur||!canSend())return;
+  for(const f of fs){if(f.size>MAXF){toast(f.name+': 300MB se badi file nahi');continue}queue.push({f,to:cur})}pump();
 }
 async function pump(){
   if(sending)return;sending=true;
   while(queue.length){
-    const {f,ids,w}=queue.shift(),tid=Math.floor(Math.random()*4294967295)>>>0;
-    const cs=isHost?ids.map(i=>conns[i]).filter(c=>c&&c.open):[conn];
-    const el=add(`<small class="who">${esc(w)}</small>⬆️ <b>${esc(f.name)}</b> (${fmt(f.size)})<div class="bar"><i></i></div><small>sending…</small>`,true);
-    const sm=el.querySelector('small:last-child'),bar=el.querySelector('i');
-    emit({t:'meta',tid,name:f.name,size:f.size,type:f.type,to:ids});
-    const t0=Date.now();let off=0,last=0;
+    const {f,to}=queue.shift(),tid=Math.floor(Math.random()*4294967296)>>>0,k='o'+tid;
+    if(to!=='group'&&!isOn(to)){toast('Offline: '+f.name);continue}
+    emit({t:'meta',tid,to,name:f.name,size:f.size,type:f.type});
+    const r=isHost?routes[UID+':'+tid]:null;
+    if(isHost&&(!r||!r.tg.length)){toast('Koi online nahi');continue}
+    xf.set(k,{l:'⬆️ '+f.name,p:0});let off=0,last=0;
     while(off<f.size){
       const big=await f.slice(off,off+BIG).arrayBuffer();
       for(let p=0;p<big.byteLength;p+=CH){
         const n=Math.min(CH,big.byteLength-p),u=new Uint8Array(4+n);
         new DataView(u.buffer).setUint32(0,tid);u.set(new Uint8Array(big,p,n),4);
-        for(const c of cs){await drain(c);if(c.open)c.send(u)}
+        if(isHost)await fwd(r,u.buffer);else{if(!conn.open)break;await drain(conn);conn.send(u)}
       }
       off+=big.byteLength;
-      if(Date.now()-last>150){last=Date.now();bar.style.width=(off/f.size*100)+'%';sm.textContent=`${(off/f.size*100).toFixed(0)}% · ${fmt(off/((Date.now()-t0)/1000||1))}/s`}
+      if(Date.now()-last>200){last=Date.now();xf.get(k).p=off/f.size;renderXf()}
     }
-    for(const c of cs)while(c.open&&c.dataChannel.bufferedAmount>0)await new Promise(r=>setTimeout(r,50));
-    emit({t:'end',tid,to:ids});bar.style.width='100%';sm.textContent='✓ sent';
+    if(!isHost)while(conn.open&&conn.dataChannel.bufferedAmount>0)await new Promise(x=>setTimeout(x,50));
+    emit({t:'end',tid,to});xf.delete(k);renderXf();
+    await saveMsg({chat:to,from:UID,k:'f',name:cleanFile(f.name),size:f.size,type:safeMime(f.type),blob:f,ts:Date.now(),mine:1});
   }
   sending=false;
 }
 
+/* ---- wiring ---- */
 $('sb').onclick=sendText;
 $('tx').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText()}};
-$('drop').onclick=()=>$('fi').click();
-$('fi').onchange=e=>{addFiles(e.target.files);e.target.value=''};
-['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('hot')}));
-['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('hot')}));
-$('drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles(e.clipboardData.files)});
-$('jb').onclick=()=>{const v=$('join').value.trim();if(/^\d{6}$/.test(v)){location.hash=v;location.reload()}};
-/^\d{6}$/.test(hash())?guest(hash()):host();
+$('bAtt').onclick=()=>$('fi').click();
+$('fi').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+$('back').onclick=()=>{$('app').classList.remove('open');cur=null;$('cv').classList.add('hide');$('empty').classList.remove('hide');renderList()};
+$('bClr').onclick=async()=>{if(!cur||!confirm('Is chat ke saare messages is device se delete karein?'))return;
+  await new Promise(r=>{const t=db.transaction('msgs','readwrite'),s=t.objectStore('msgs'),k=s.index('chat').openKeyCursor(IDBKeyRange.only(cur));k.onsuccess=()=>{const c=k.result;if(c){s.delete(c.primaryKey);c.continue()}};t.oncomplete=r});
+  const c=cur==='group'?GROUP:contacts.get(cur);c.last='';saveContact(c);openChat(cur)};
+const mm=$('cv').parentElement;
+mm.ondragover=e=>e.preventDefault();mm.ondrop=e=>{e.preventDefault();addFiles([...e.dataTransfer.files])};
+addEventListener('paste',e=>{if(e.clipboardData.files.length)addFiles([...e.clipboardData.files])});
+document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>b.closest('.ov').classList.add('hide'));
+$('bInv').onclick=()=>{
+  $('ovInv').classList.remove('hide');$('qr').innerHTML='';$('lnk').value=link();
+  try{new QRCode($('qr'),{text:link(),width:180,height:180,correctLevel:QRCode.CorrectLevel.M})}catch(e){}
+};
+$('cpy').onclick=()=>navigator.clipboard.writeText(link()).then(()=>toast('Link copy ho gaya'));
+$('bSet').onclick=()=>{$('nm').value=NAME;$('ovSet').classList.remove('hide')};
+$('nm').onchange=()=>{NAME=cleanName($('nm').value);lg('qs_name',NAME);$('me').textContent=NAME;toast('Naam save hua (agli baar join pe sab ko dikhega)')};
+$('bNew').onclick=()=>{if(confirm('Naya room banega, purane room ke log judne nahi paayenge. Pakka?')){try{L.removeItem('qs_host')}catch(e){}lg('qs_role','host');location.href=location.pathname}};
+$('bLeave').onclick=()=>{lg('qs_role','host');location.href=location.pathname};
+$('bWipe').onclick=()=>{if(confirm('Is device ke saare chats, files aur settings delete honge. Pakka?')){try{L.clear()}catch(e){}indexedDB.databases?indexedDB.databases().then(a=>Promise.all(a.map(d=>indexedDB.deleteDatabase(d.name)))).then(()=>location.href=location.pathname):location.href=location.pathname}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cur){const c=cur==='group'?GROUP:contacts.get(cur);if(c&&c.unread){c.unread=0;saveContact(c);renderList()}}});
 </script>
 </body>
 </html>
