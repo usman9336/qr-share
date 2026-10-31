@@ -51,27 +51,35 @@ input,textarea{width:100%;background:var(--gl);border:1px solid var(--bd);border
 .ov>div{width:min(380px,100%);padding:18px;display:grid;gap:10px;background:var(--bg2);text-align:center}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 16px;border-radius:99px;z-index:20;font-size:.85rem}
 #back{display:none}
+.hd button{padding:6px 9px}
+.ac{padding:1px 7px;font-size:.7rem;margin-left:4px}
+#jrow{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--bd)}
+#jrow input{padding:7px 10px}
+#mlist label{display:flex;gap:8px;padding:6px 2px}
+#mlist input{width:auto}
 @media(max-width:720px){#app{grid-template-columns:1fr;padding:0;gap:0}.gl{border-radius:0}main{display:none}#app.open aside{display:none}#app.open main{display:flex}#back{display:inline-block}}
 </style>
 </head>
 <body>
 <div id="app">
  <aside class="gl">
-  <div class="hd"><div><b id="me"></b><span class="bdg" id="st">…</span></div><div><button class="s" id="bInv">📲</button> <button class="s" id="bSet">⚙️</button></div></div>
+  <div class="hd"><div><b id="me"></b> <span class="bdg" id="st">…</span><br><span class="bdg" id="ld"></span> <button class="s ac hide" id="bLdr">👑 Leader banna hai</button></div><div><button class="s" id="bMulti" title="Kai logo ko">📤</button> <button class="s" id="bInv" title="Invite">📲</button> <button class="s" id="bDis" title="Disconnect">🔌</button> <button class="s" id="bSet">⚙️</button></div></div>
   <div id="appr"></div>
+  <div id="jrow"><input id="jc" placeholder="Code daalke room me judo"><button id="jb">Judo</button></div>
   <div id="list"></div>
  </aside>
  <main class="gl">
   <div id="empty">💬<br>Left side se kisi ko chuno ya Group kholo.<br><span class="mut">📲 se QR dikhake naye log jodo.</span></div>
   <div id="cv" class="hide">
-   <div class="hd"><div style="display:flex;gap:8px;align-items:center"><button class="s" id="back">←</button><div><b id="hn"></b><span class="bdg" id="hs"></span></div></div><button class="s" id="bClr">🗑</button></div>
+   <div class="hd"><div style="display:flex;gap:8px;align-items:center"><button class="s" id="back">←</button><div><b id="hn"></b><span class="bdg" id="hs"></span></div></div><span><button class="s hide" id="bKick">🚫 Remove</button> <button class="s" id="bClr">🗑</button></span></div>
    <div id="msgs"></div><div id="xf"></div>
    <div class="cm"><button class="s" id="bAtt">📎</button><input type="file" id="fi" multiple hidden><textarea id="tx" rows="1" placeholder="Message likho…"></textarea><button id="sb">Send</button></div>
   </div>
  </main>
 </div>
-<div class="ov hide" id="ovInv"><div class="gl"><b>Room me jodo</b><div id="qr" style="background:#fff;padding:10px;border-radius:12px;justify-self:center"></div><input id="lnk" readonly><button id="cpy">🔗 Link copy</button><span class="mut">Sirf unhe do jinhe judne dena hai. Naye banda ko host Allow karega.</span><button class="s" data-x>Band karo</button></div></div>
+<div class="ov hide" id="ovInv"><div class="gl"><b>Room me jodo</b><div id="qr" style="background:#fff;padding:10px;border-radius:12px;justify-self:center"></div><input id="lnk" readonly><button id="cpy">🔗 Link copy</button><input id="tok" readonly><button class="s" id="cpy2">🔑 Code copy</button><span class="mut">Sirf unhe do jinhe judne dena hai. Naye banda ko host Allow karega.</span><button class="s" data-x>Band karo</button></div></div>
 <div class="ov hide" id="ovSet"><div class="gl"><b>Settings</b><input id="nm" maxlength="20" placeholder="Tumhara naam"><button class="s" id="bNew">Naya room banao</button><button class="s" id="bLeave">Room chhodo (host ban jao)</button><button class="s" id="bWipe">Saara local data delete</button><button class="s" data-x>Band karo</button></div></div>
+<div class="ov hide" id="ovMulti"><div class="gl"><b>Kai logo ko ek saath bhejo</b><div id="mlist" style="text-align:left;max-height:200px;overflow:auto"></div><textarea id="mtx" rows="3" placeholder="Message…"></textarea><input type="file" id="mfi" multiple><button id="mSend">Send</button><button class="s" data-x>Band karo</button></div></div>
 <div id="toast" class="hide"></div>
 <script>
 const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=65536,BIG=8388608,MAXF=314572800;
@@ -100,7 +108,7 @@ async function dec(s){const o=unb64(s);return td.decode(await crypto.subtle.decr
 /* ---- state + IndexedDB ---- */
 let UID=lg('qs_uid');if(!UID){UID=rnd(12);lg('qs_uid',UID)}
 let NAME=cleanName(lg('qs_name')||prompt('Tumhara naam?')||'User'+Math.floor(10+Math.random()*90));lg('qs_name',NAME);
-let ROOM,SECRET,isHost,peer,conn,db,cur=null,online=new Set(),conns={},routes={},inc={},seen=new Set(),queue=[],sending=false,urls=[];
+let ROOM,SECRET,isHost,peer,conn,db,cur=null,online=new Set(),conns={},routes={},inc={},seen=new Set(),queue=[],sending=false,urls=[],LEADER=null,pend={},manualOff=false;
 const contacts=new Map(),xf=new Map(),GROUP={uid:'group',name:'👥 Group',up:0};
 const idb=n=>new Promise((res,rej)=>{const r=indexedDB.open(n,1);r.onupgradeneeded=()=>{r.result.createObjectStore('msgs',{keyPath:'id',autoIncrement:true}).createIndex('chat','chat');r.result.createObjectStore('contacts',{keyPath:'uid'})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const tx=(s,m='readonly')=>db.transaction(s,m).objectStore(s);
@@ -116,10 +124,10 @@ const parseTok=s=>{const m=/(\d{6})-([a-z0-9]{8,})/i.exec(s||'');return m&&{room
   else if(lg('qs_role')==='guest')t=parseTok(lg('qs_join'));
   isHost=!t;
   if(isHost){t=parseTok(lg('qs_host'));if(!t){t={room:rnd(6,'0123456789'),secret:rnd(10)};lg('qs_host',t.room+'-'+t.secret)}}
-  ROOM=t.room;SECRET=t.secret;
+  ROOM=t.room;SECRET=t.secret;LEADER=isHost?(lg('qs_leader_'+t.room)||UID):null;
   await mkKey(ROOM,SECRET);db=await idb('qs-'+ROOM);
   for(const c of await P(tx('contacts').getAll()))if(c.uid==='group')Object.assign(GROUP,c);else contacts.set(c.uid,c);
-  renderList();isHost?startHost():startGuest();
+  if(isHost&&LEADER!==UID&&!contacts.has(LEADER))LEADER=UID;renderList();isHost?startHost():startGuest();
   setInterval(()=>{for(const k in inc)if(Date.now()-inc[k].last>120000){delete inc[k];xf.delete('i'+k)}renderXf()},30000);
 })();
 const setSt=(t,on)=>{$('st').textContent=t;$('st').className='bdg'+(on?' on':'')};
@@ -129,14 +137,14 @@ const link=()=>location.origin+location.pathname+'#'+ROOM+'-'+SECRET;
 function startHost(){
   peer=new Peer(PFX+ROOM);
   peer.on('open',()=>setSt('● room live',1));
-  peer.on('error',e=>{if(e.type==='unavailable-id'){setSt('room busy, retry…');try{peer.destroy()}catch(x){}setTimeout(startHost,4000)}else setSt('error '+e.type)});
-  peer.on('disconnected',()=>peer.reconnect());
+  peer.on('error',e=>{if(e.type==='unavailable-id'){setSt('room busy, retry…');try{peer.destroy()}catch(x){}if(!manualOff)setTimeout(startHost,4000)}else setSt('error '+e.type)});
+  peer.on('disconnected',()=>{if(!manualOff&&!peer.destroyed)try{peer.reconnect()}catch(e){}});
   peer.on('connection',c=>{
     if(Object.keys(conns).length>=30){c.close();return}
     const st={c,n:rnd(16),w:0,k:0};
     c.on('open',async()=>{c.send(JSON.stringify({t:'chal',n:st.n,hp:await enc(st.n)}));setTimeout(()=>{if(!st.ver)c.close()},8000)});
     c.on('data',d=>q(st,x=>hostRecv(st,x),d));
-    c.on('close',()=>{if(st.row)st.row.remove();for(const k in routes)if(routes[k].from===st.uid)delete routes[k];if(st.uid&&conns[st.uid]===st){delete conns[st.uid];pushRoster()}});
+    c.on('close',()=>{if(st.uid&&pend[st.uid]===st)delete pend[st.uid];for(const k in routes)if(routes[k].from===st.uid)delete routes[k];if(st.uid&&conns[st.uid]===st){delete conns[st.uid];pushRoster();if(st.uid===LEADER)Object.values(pend).forEach(p=>showReq({t:'jreq',uid:p.uid,name:p.name}))}});
     c.on('error',()=>{});
   });
 }
@@ -158,11 +166,33 @@ async function hostRecv(st,d){
     const r=routes[st.uid+':'+new DataView(buf).getUint32(0)];if(r)await fwd(r,buf);
   }
 }
-function askApproval(st){
-  const row=el('div'),s=el('span',null,st.name+' judna chahta hai'),a=el('button',null,'Allow'),b=el('button','s','Block');
-  row.append(s,a,b);$('appr').append(row);st.row=row;
-  a.onclick=()=>{row.remove();st.row=null;accept(st)};
-  b.onclick=()=>{row.remove();st.row=null;contacts.set(st.uid,{uid:st.uid,name:st.name,blocked:1,up:0});saveContact(contacts.get(st.uid));st.c.close()};
+const reqs={},approver=()=>LEADER&&LEADER!==UID&&isOn(LEADER)?LEADER:UID;
+function askApproval(st){pend[st.uid]=st;const m={t:'jreq',uid:st.uid,name:st.name},ap=approver();ap===UID?showReq(m):sendTo(ap,m)}
+function resolvePending(uid,ok){
+  const st=pend[uid];delete pend[uid];if(!st||!st.c.open)return;
+  if(ok)accept(st);else{contacts.set(uid,{uid,name:st.name,blocked:1,up:0});saveContact(contacts.get(uid));st.c.close()}
+}
+function showReq(m){
+  const key=m.t+(m.uid||m.from);if(reqs[key])return;
+  const row=el('div'),a=el('button',null,'Allow'),b=el('button','s','Deny');
+  row.append(el('span',null,m.t==='jreq'?cleanName(m.name)+' judna chahta hai':cleanName(m.fn)+' leader banna chahta hai'),a,b);$('appr').append(row);reqs[key]=row;
+  const done=ok=>{row.remove();delete reqs[key];
+    if(m.t==='jreq')isHost?resolvePending(m.uid,ok):conn.send(JSON.stringify({t:'jdec',uid:m.uid,ok}));
+    else if(ok)isHost?setLeader(m.from):conn.send(JSON.stringify({t:'lset',uid:m.from}))};
+  a.onclick=()=>done(true);b.onclick=()=>done(false);
+}
+function setLeader(uid){LEADER=uid;lg('qs_leader_'+ROOM,uid);pushRoster()}
+function removeMember(uid){
+  if(uid===UID)return;const s=conns[uid];
+  if(s){try{s.c.send(JSON.stringify({t:'kicked'}))}catch(e){}delete conns[uid];s.ok=0;setTimeout(()=>s.c.close(),300)}
+  contacts.delete(uid);try{tx('contacts','readwrite').delete(uid)}catch(e){}
+  if(uid===LEADER){LEADER=UID;lg('qs_leader_'+ROOM,UID)}pushRoster();
+}
+function leaderUI(){
+  $('ld').textContent=LEADER?'👑 Leader: '+(LEADER===UID?'Tum':fnOf(LEADER)):'';
+  $('bLdr').classList.toggle('hide',!LEADER||LEADER===UID);
+  const c=cur&&cur!=='group'&&contacts.get(cur);
+  $('bKick').classList.toggle('hide',!(c&&(isHost||LEADER===UID)));
 }
 function accept(st){
   const old=conns[st.uid];if(old&&old!==st){old.ok=0;old.c.close()}
@@ -172,15 +202,24 @@ function accept(st){
 }
 function pushRoster(){
   const list=[{uid:UID,name:NAME,on:1},...[...contacts.values()].filter(c=>!c.blocked).map(c=>({uid:c.uid,name:c.name,on:isOn(c.uid)?1:0}))].slice(0,100);
-  const s=JSON.stringify({t:'roster',list});
+  const s=JSON.stringify({t:'roster',list,leader:LEADER});
   for(const u in conns)if(conns[u].ok&&conns[u].c.open)conns[u].c.send(s);
   renderList();updateHead();
 }
 const fnOf=u=>u===UID?NAME:(contacts.get(u)||{}).name||'?';
-const targetsOf=(from,to)=>to==='group'?[...[...contacts.values()].filter(c=>!c.blocked).map(c=>c.uid),UID].filter(u=>u!==from):(to===UID||(contacts.has(to)&&!contacts.get(to).blocked))&&to!==from?[to]:[];
+const okU=(u,from)=>u!==from&&(u===UID||(contacts.has(u)&&!contacts.get(u).blocked));
+const targetsOf=(from,to)=>to==='group'?[...[...contacts.values()].filter(c=>!c.blocked).map(c=>c.uid),UID].filter(u=>u!==from):Array.isArray(to)?[...new Set(to.filter(u=>isU(u)&&okU(u,from)))].slice(0,30):typeof to==='string'&&okU(to,from)?[to]:[];
 function sendTo(u,o){if(u===UID)incoming(o);else{const s=conns[u];if(s&&s.ok&&s.c.open)s.c.send(JSON.stringify(o))}}
 function route(from,m){
   const g=m.to==='group'?1:0;
+  if(m.t==='lreq'){if(from===LEADER)return;const ap=approver();if(ap===from)setLeader(from);else sendTo(ap,{t:'lreq',from,fn:fnOf(from)});return}
+  if(m.t==='jdec'){if(from===LEADER&&isU(m.uid))resolvePending(m.uid,!!m.ok);return}
+  if(m.t==='lset'){if(from===LEADER&&isU(m.uid)&&okU(m.uid,''))setLeader(m.uid);return}
+  if(m.t==='kick'){if(from===LEADER&&isU(m.uid))removeMember(m.uid);return}
+  if(m.t==='edit'||m.t==='del'){
+    if(typeof m.mid!=='string'||m.mid.length>20||(m.t==='edit'&&(typeof m.d!=='string'||!m.d||m.d.length>8000)))return;
+    const o={t:m.t,mid:m.mid,from,g,d:m.d};targetsOf(from,m.to).forEach(u=>sendTo(u,o));return;
+  }
   if(m.t==='msg'){
     if(typeof m.d!=='string'||!m.d||m.d.length>8000)return;
     const o={t:'msg',mid:String(m.mid||rnd(10)).slice(0,20),ts:Date.now(),from,fn:fnOf(from),g,d:m.d};
@@ -189,7 +228,7 @@ function route(from,m){
     if(!Number.isInteger(m.tid)||m.tid<0||m.tid>4294967295||typeof m.name!=='string'||!(m.size>=0&&m.size<=MAXF))return;
     const tg=targetsOf(from,m.to).filter(u=>u===UID||(conns[u]&&conns[u].ok));
     routes[from+':'+m.tid]={from,tg};
-    const o={t:'meta',tid:m.tid,ts:Date.now(),from,fn:fnOf(from),g,name:cleanFile(m.name),size:m.size,type:safeMime(String(m.type||''))};
+    const o={t:'meta',tid:m.tid,mid:String(m.mid||'').slice(0,20),ts:Date.now(),from,fn:fnOf(from),g,name:cleanFile(m.name),size:m.size,type:safeMime(String(m.type||''))};
     tg.forEach(u=>sendTo(u,o));
   }else if(m.t==='end'){
     const r=routes[from+':'+m.tid];if(!r)return;
@@ -200,7 +239,7 @@ async function fwd(r,buf){for(const u of r.tg){if(u===UID)onChunk(buf);else{cons
 
 /* ---- GUEST ---- */
 let rt;
-function retry(){clearTimeout(rt);try{peer.destroy()}catch(e){}rt=setTimeout(startGuest,3500)}
+function retry(){clearTimeout(rt);try{peer.destroy()}catch(e){}if(!manualOff)rt=setTimeout(startGuest,3500)}
 function startGuest(){
   setSt('connecting…');
   peer=new Peer();
@@ -216,30 +255,38 @@ function startGuest(){
           c.send(JSON.stringify({t:'hello',uid:UID,name:NAME,proof:await enc(JSON.stringify({n:m.n,uid:UID}))}));setSt('host approval ka wait…');
         }else if(m.t==='ok'){ver=true;setSt('● connected',1)}
         else if(!ver)return;
-        else if(m.t==='roster'&&Array.isArray(m.list))onRoster(m.list);
-        else if(m.t==='msg'||m.t==='meta'||m.t==='end'){if(m.t==='end'||isU(m.from))incoming(m)}
+        else if(m.t==='roster'&&Array.isArray(m.list))onRoster(m.list,m.leader);
+        else if(['msg','meta','end','edit','del','lreq'].includes(m.t)){if(m.t==='end'||isU(m.from))incoming(m)}
+        else if(m.t==='jreq'&&isU(m.uid))incoming(m)
+        else if(m.t==='kicked'){manualOff=true;clearTimeout(rt);setSt('Leader ne room se hata diya');$('bDis').textContent='🔌 Connect'}
       }else if(ver)onChunk(await toBuf(x));
     },d));
     c.on('close',()=>{online=new Set();renderList();updateHead();setSt('disconnected');if(c===conn)retry()});
     c.on('error',()=>{});
   });
 }
-function onRoster(list){
+function onRoster(list,leader){
+  if(isU(leader))LEADER=leader;
   const on=new Set();
   for(const e of list.slice(0,100)){
     if(!isU(e.uid)||e.uid===UID)continue;
     let c=contacts.get(e.uid);if(!c){c={uid:e.uid,up:Date.now()};contacts.set(e.uid,c)}
     c.name=cleanName(e.name);if(e.on){on.add(e.uid);if(!online.has(e.uid))c.up=Date.now()}saveContact(c);
   }
+  const ids=new Set(list.map(e=>e.uid));
+  for(const u of [...contacts.keys()])if(!ids.has(u)){contacts.delete(u);try{tx('contacts','readwrite').delete(u)}catch(e){}}
+  if(cur&&cur!=='group'&&!contacts.has(cur))$('back').onclick();
   online=on;renderList();updateHead();
 }
 
 /* ---- receive ---- */
 async function incoming(m){
   const chat=m.g?'group':m.from;
+  if(m.t==='lreq'||m.t==='jreq'){if(isHost||LEADER===UID)showReq(m);return}
+  if(m.t==='edit'||m.t==='del'){await remoteEdit(m,chat);return}
   if(m.t==='msg'){
     if(typeof m.d!=='string'||m.d.length>8000||seen.has(m.mid))return;seen.add(m.mid);
-    await saveMsg({chat,from:m.from,fn:cleanName(m.fn),k:'t',d:m.d,ts:Number(m.ts)||Date.now(),mine:0});
+    await saveMsg({chat,mid:m.mid,from:m.from,fn:cleanName(m.fn),k:'t',d:m.d,ts:Number(m.ts)||Date.now(),mine:0});
   }else if(m.t==='meta'){
     if(!Number.isInteger(m.tid)||!(m.size>=0&&m.size<=MAXF)||Object.keys(inc).length>20)return;
     inc[m.tid]={m:{...m,name:cleanFile(m.name),type:safeMime(String(m.type||''))},chat,parts:[],got:0,last:Date.now(),t:Date.now()};
@@ -247,7 +294,7 @@ async function incoming(m){
   }else if(m.t==='end'){
     const r=inc[m.tid];if(!r)return;delete inc[m.tid];xf.delete('i'+m.tid);renderXf();
     if(r.got!==r.m.size)return toast('Transfer adhura raha: '+r.m.name);
-    await saveMsg({chat:r.chat,from:r.m.from,fn:cleanName(r.m.fn),k:'f',name:r.m.name,size:r.m.size,type:r.m.type,blob:new Blob(r.parts,{type:'application/octet-stream'}),ts:Date.now(),mine:0});
+    await saveMsg({chat:r.chat,mid:r.m.mid,from:r.m.from,fn:cleanName(r.m.fn),k:'f',name:r.m.name,size:r.m.size,type:r.m.type,blob:new Blob(r.parts,{type:'application/octet-stream'}),ts:Date.now(),mine:0});
   }
 }
 function onChunk(buf){
@@ -277,10 +324,11 @@ function renderList(){
   for(const c of rows){
     const d=el('div','ci'+(cur===c.uid?' act':'')),av=el('div','av',c.uid==='group'?'👥':c.name[0].toUpperCase()),t=el('div','t');
     if(c.uid!=='group')av.append(el('i',isOn(c.uid)?'on':''));
-    t.append(el('div',null,c.name),el('div','mut',c.last||(c.uid==='group'?'Sabke saath chat':isOn(c.uid)?'online':'offline')));
+    t.append(el('div',null,(c.uid===LEADER?'👑 ':'')+c.name),el('div','mut',c.last||(c.uid==='group'?'Sabke saath chat':isOn(c.uid)?'online':'offline')));
     d.append(av,t);if(c.unread)d.append(el('span','un',c.unread));
     d.onclick=()=>openChat(c.uid);L2.append(d);
   }
+  leaderUI();
 }
 function updateHead(){
   if(!cur)return;const c=cur==='group'?GROUP:contacts.get(cur);if(!c)return;
@@ -296,6 +344,7 @@ async function openChat(u){
 }
 function bubble(o){
   const b=el('div','b'+(o.mine?' me':''));
+  if(o.k==='x'){b.style.opacity='.6';b.append(el('div','tx','🚫 Message delete kiya gaya'),el('div','tm',when(o.ts)));$('msgs').append(b);return}
   if(cur==='group'&&!o.mine)b.append(el('div','who',o.fn||'?'));
   if(o.k==='t')b.append(el('div','tx',o.d));
   else{
@@ -303,7 +352,10 @@ function bubble(o){
     b.append(el('div',null,'📎 '+o.name+' ('+fmt(o.size)+')'));
     const a=el('button','dl','⬇ Download');a.onclick=()=>dl(o);b.append(a);
   }
-  b.append(el('div','tm',when(o.ts)));$('msgs').append(b);$('msgs').scrollTop=1e9;
+  const tm=el('div','tm',(o.ed?'edited · ':'')+when(o.ts));
+  if(o.mine&&o.k==='t'&&o.mid){const e=el('button','s ac','✏️');e.onclick=()=>editMsg(o);tm.append(e)}
+  const x=el('button','s ac','🗑');x.onclick=()=>delMsg(o);tm.append(x);
+  b.append(tm);$('msgs').append(b);$('msgs').scrollTop=1e9;
 }
 function dl(o){
   if(/\.(exe|bat|cmd|com|scr|msi|js|jse|vbs|ps1|jar|apk|sh|lnk|hta|dll|html?|svg)$/i.test(o.name)&&!confirm('Yeh file khatarnak ho sakti hai ('+o.name+'). Phir bhi download karein?'))return;
@@ -321,18 +373,19 @@ async function sendText(){
   const d=$('tx').value.trim();if(!d||!cur||!canSend())return;
   if(d.length>8000)return toast('Message bahut lamba hai');
   const mid=rnd(10);$('tx').value='';
-  emit({t:'msg',mid,to:cur,d});await saveMsg({chat:cur,from:UID,k:'t',d,ts:Date.now(),mine:1});
+  emit({t:'msg',mid,to:cur,d});await saveMsg({chat:cur,from:UID,k:'t',mid,to:cur,d,ts:Date.now(),mine:1});
 }
-function addFiles(fs){
-  if(!cur||!canSend())return;
-  for(const f of fs){if(f.size>MAXF){toast(f.name+': 300MB se badi file nahi');continue}queue.push({f,to:cur})}pump();
+function addFiles(fs,to){
+  to=to||cur;if(!to)return;
+  if(!Array.isArray(to)&&!canSend())return;
+  for(const f of fs){if(f.size>MAXF){toast(f.name+': 300MB se badi file nahi');continue}queue.push({f,to})}pump();
 }
 async function pump(){
   if(sending)return;sending=true;
   while(queue.length){
-    const {f,to}=queue.shift(),tid=Math.floor(Math.random()*4294967296)>>>0,k='o'+tid;
-    if(to!=='group'&&!isOn(to)){toast('Offline: '+f.name);continue}
-    emit({t:'meta',tid,to,name:f.name,size:f.size,type:f.type});
+    const {f,to}=queue.shift(),tid=Math.floor(Math.random()*4294967296)>>>0,k='o'+tid,mid=rnd(10),tos=Array.isArray(to)?to.filter(isOn):[to];
+    if(to!=='group'&&!tos.length){toast('Offline: '+f.name);continue}
+    emit({t:'meta',tid,mid,to,name:f.name,size:f.size,type:f.type});
     const r=isHost?routes[UID+':'+tid]:null;
     if(isHost&&(!r||!r.tg.length)){toast('Koi online nahi');continue}
     xf.set(k,{l:'⬆️ '+f.name,p:0});let off=0,last=0;
@@ -348,7 +401,7 @@ async function pump(){
     }
     if(!isHost)while(conn.open&&conn.dataChannel.bufferedAmount>0)await new Promise(x=>setTimeout(x,50));
     emit({t:'end',tid,to});xf.delete(k);renderXf();
-    await saveMsg({chat:to,from:UID,k:'f',name:cleanFile(f.name),size:f.size,type:safeMime(f.type),blob:f,ts:Date.now(),mine:1});
+    for(const c of tos)await saveMsg({chat:c,from:UID,k:'f',mid,to,name:cleanFile(f.name),size:f.size,type:safeMime(f.type),blob:f,ts:Date.now(),mine:1});
   }
   sending=false;
 }
@@ -377,6 +430,69 @@ $('bNew').onclick=()=>{if(confirm('Naya room banega, purane room ke log judne na
 $('bLeave').onclick=()=>{lg('qs_role','host');location.href=location.pathname};
 $('bWipe').onclick=()=>{if(confirm('Is device ke saare chats, files aur settings delete honge. Pakka?')){try{L.clear()}catch(e){}indexedDB.databases?indexedDB.databases().then(a=>Promise.all(a.map(d=>indexedDB.deleteDatabase(d.name)))).then(()=>location.href=location.pathname):location.href=location.pathname}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cur){const c=cur==='group'?GROUP:contacts.get(cur);if(c&&c.unread){c.unread=0;saveContact(c);renderList()}}});
+
+/* ---- edit / delete ---- */
+const live=()=>isHost||(conn&&conn.open)||(toast('Connected nahi ho'),false);
+const chatsOf=o=>o.to?(o.to==='group'?['group']:Array.isArray(o.to)?o.to:[o.to]):[o.chat];
+const findMsg=async(chat,mid,from)=>(await P(tx('msgs').index('chat').getAll(chat))).find(x=>x.mid===mid&&x.from===from);
+const putMsg=m=>P(tx('msgs','readwrite').put(m));
+async function editMsg(o){
+  const d=prompt('Message edit karo',o.d);if(d===null)return;const t=d.trim();
+  if(!t||t===o.d||t.length>8000||!live())return;
+  emit({t:'edit',mid:o.mid,to:o.to||o.chat,d:t});
+  for(const c of chatsOf(o)){const m=await findMsg(c,o.mid,UID);if(m){m.d=t;m.ed=1;await putMsg(m)}}
+  openChat(cur);
+}
+async function delMsg(o){
+  if(o.mine&&o.mid&&confirm('Sabke liye delete karein?\n(Cancel = sirf is device se delete ka option)')){
+    if(!live())return;
+    emit({t:'del',mid:o.mid,to:o.to||o.chat});
+    for(const c of chatsOf(o)){const m=await findMsg(c,o.mid,UID);if(m){m.k='x';m.d='';delete m.blob;await putMsg(m)}}
+    return openChat(cur);
+  }
+  if(!confirm('Sirf is device se delete karein?'))return;
+  await P(tx('msgs','readwrite').delete(o.id));openChat(cur);
+}
+async function remoteEdit(m,chat){
+  const x=await findMsg(chat,m.mid,m.from);if(!x)return;
+  if(m.t==='edit'&&x.k==='t'){x.d=m.d;x.ed=1}else if(m.t==='del'){x.k='x';x.d='';delete x.blob}else return;
+  await putMsg(x);if(cur===chat)openChat(chat);
+}
+
+/* ---- connect / disconnect / leader / multi / join ---- */
+function disconnect(){
+  manualOff=true;clearTimeout(rt);
+  try{conn&&conn.close()}catch(e){}try{peer&&peer.destroy()}catch(e){}
+  for(const u in conns)delete conns[u];online=new Set();pend={};
+  setSt('disconnected');$('bDis').textContent='🔌 Connect';renderList();updateHead();
+}
+function reconnect(){manualOff=false;$('bDis').textContent='🔌';isHost?startHost():startGuest()}
+$('bDis').onclick=()=>manualOff?reconnect():disconnect();
+addEventListener('pagehide',()=>{try{conn&&conn.close()}catch(e){}try{peer&&peer.destroy()}catch(e){}});
+$('bLdr').onclick=()=>{if(!live())return;emit({t:'lreq'});toast('Request leader ko bhej di')};
+$('bKick').onclick=()=>{
+  if(!cur||cur==='group'||!confirm(fnOf(cur)+' ko room se hatana hai?'))return;
+  const u=cur;$('back').onclick();isHost?removeMember(u):live()&&conn.send(JSON.stringify({t:'kick',uid:u}));
+};
+$('jb').onclick=()=>{const t=parseTok($('jc').value);if(!t)return toast('Code galat hai (jaise 123456-abcdefghij)');lg('qs_join',t.room+'-'+t.secret);lg('qs_role','guest');location.href=location.pathname};
+$('cpy2').onclick=()=>navigator.clipboard.writeText(ROOM+'-'+SECRET).then(()=>toast('Code copy ho gaya'));
+$('bInv').addEventListener('click',()=>{$('tok').value=ROOM+'-'+SECRET});
+$('bMulti').onclick=()=>{
+  const l=$('mlist');l.innerHTML='';
+  const rows=[...contacts.values()].filter(c=>!c.blocked).sort((a,b)=>isOn(b.uid)-isOn(a.uid));
+  if(!rows.length)return toast('Abhi koi contact nahi');
+  for(const c of rows){const lb=el('label'),cb=el('input');cb.type='checkbox';cb.value=c.uid;cb.disabled=!isOn(c.uid);lb.append(cb,el('span',null,c.name+(isOn(c.uid)?' 🟢':' (offline)')));l.append(lb)}
+  $('ovMulti').classList.remove('hide');
+};
+$('mSend').onclick=async()=>{
+  const ids=[...$('mlist').querySelectorAll('input:checked')].map(x=>x.value),t=$('mtx').value.trim(),fs=[...$('mfi').files];
+  if(!ids.length)return toast('Kam se kam ek banda chuno');
+  if(!t&&!fs.length||!live())return;
+  if(t.length>8000)return toast('Message bahut lamba hai');
+  if(t){const mid=rnd(10);emit({t:'msg',mid,to:ids,d:t});for(const c of ids)await saveMsg({chat:c,from:UID,k:'t',mid,to:ids,d:t,ts:Date.now(),mine:1})}
+  if(fs.length)addFiles(fs,ids);
+  $('mtx').value='';$('mfi').value='';$('ovMulti').classList.add('hide');toast('Bhej diya ✓');
+};
 </script>
 </body>
 </html>
