@@ -82,7 +82,7 @@ input,textarea{width:100%;background:var(--gl);border:1px solid var(--bd);border
 <div class="ov hide" id="ovMulti"><div class="gl"><b>Kai logo ko ek saath bhejo</b><div id="mlist" style="text-align:left;max-height:200px;overflow:auto"></div><textarea id="mtx" rows="3" placeholder="Message…"></textarea><input type="file" id="mfi" multiple><button id="mSend">Send</button><button class="s" data-x>Band karo</button></div></div>
 <div id="toast" class="hide"></div>
 <script>
-const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=131072,BIG=8388608,MAXF=8589934592,NS=3;
+const $=id=>document.getElementById(id),L=localStorage,PFX='qs3-',CH=131072,BIG=8388608,MAXF=8589934592,NS=6;
 const lg=(k,v)=>{try{return v===undefined?L.getItem(k):L.setItem(k,v)}catch(e){return null}};
 const rnd=(n,al='abcdefghjkmnpqrstuvwxyz23456789')=>Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>al[b%al.length]).join('');
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
@@ -187,7 +187,7 @@ function dServe(c){
 // sender side: open one verified stripe to a peer
 function dOpen(uid){
   return new Promise((res,rej)=>{
-    const c=peer.connect(PFX+ROOM+'-'+uid,{reliable:true,serialization:'raw',metadata:{k:'f'}});
+    const c=peer.connect(uid===HOSTUID?PFX+ROOM:PFX+ROOM+'-'+uid,{reliable:true,serialization:'raw',metadata:{k:'f'}});
     const to=setTimeout(()=>{try{c.close()}catch(e){}rej(0)},7000);
     c.on('data',d=>q(c,async x=>{
       if(typeof x!=='string')return;let m;try{m=JSON.parse(x)}catch(e){return}
@@ -202,10 +202,18 @@ function dOpen(uid){
 }
 function dget(uid){
   const p=dcs[uid];
-  if(p)return p.then(a=>a.every(c=>c.open)?a:(delete dcs[uid],dget(uid)),()=>null);
-  const np=dcs[uid]=Promise.all(Array.from({length:NS},()=>dOpen(uid)));
-  np.catch(()=>{if(dcs[uid]===np)delete dcs[uid]});
-  return np.catch(()=>null);
+  if(p)return p.then(a=>a&&a.length&&a.every(c=>c.open)?a:(delete dcs[uid],dget(uid)));
+  const np=dcs[uid]=Promise.allSettled(Array.from({length:NS},()=>dOpen(uid))).then(rs=>{
+    const a=rs.filter(r=>r.status==='fulfilled').map(r=>r.value);
+    if(!a.length){delete dcs[uid];return null}return a;
+  });
+  return np;
+}
+async function pathOf(c){
+  try{const st=await c.peerConnection.getStats();let t='';
+    st.forEach(r=>{if(r.type==='candidate-pair'&&r.nominated&&r.state==='succeeded'){const l=st.get(r.localCandidateId);if(l)t=l.candidateType}});
+    return {host:'LAN',srflx:'P2P',prflx:'P2P',relay:'relay'}[t]||'';
+  }catch(e){return ''}
 }
 
 /* ---- HOST (hub) ---- */
@@ -494,14 +502,14 @@ async function pump(){
     xf.set(k,{l:'⬆️ '+f.name,p:0});renderXf();
     // 1-to-1 guest->guest: go direct (no host relay), striped over NS channels
     let dc=null;
-    if(!isHost&&to!=='group'&&tos.length===1&&tos[0]!==HOSTUID){
+    if(to!=='group'&&tos.length===1){
       xf.get(k).l='🔗 direct connect… '+f.name;renderXf();
       dc=await dget(tos[0]);
       if(dc){
         try{await new Promise((res,rej)=>{dw[tid]=res;setTimeout(()=>rej(0),8000);dc[0].send(JSON.stringify({t:'meta',tid,mid,name:f.name,size:f.size,type:f.type}))})}catch(e){dc=null}
         delete dw[tid];
       }
-      xf.get(k).l='⬆️ '+f.name+(dc?' ⚡':' (host se)');
+      xf.get(k).l='⬆️ '+f.name+(dc?' ⚡'+(await pathOf(dc[0]))+' ×'+dc.length:' (host se)');
     }
     let r=null;
     if(!dc){
@@ -509,14 +517,14 @@ async function pump(){
       r=isHost?routes[UID+':'+tid]:null;
       if(isHost&&(!r||!r.tg.length)){toast('Koi online nahi');xf.delete(k);renderXf();continue}
     }
-    let off=0,last=0,idx=0,bad=0;const t0=Date.now();
+    let off=0,last=0,idx=0,bad=0;const t0=Date.now();let nxt=f.slice(0,BIG).arrayBuffer();
     while(off<f.size&&!bad){
-      const big=await f.slice(off,off+BIG).arrayBuffer();
+      const big=await nxt,no=off+big.byteLength;nxt=no<f.size?f.slice(no,no+BIG).arrayBuffer():null;
       for(let p=0;p<big.byteLength;p+=CH){
         const n=Math.min(CH,big.byteLength-p),u=new Uint8Array(8+n),dv=new DataView(u.buffer);
         dv.setUint32(0,tid);dv.setUint32(4,idx);u.set(new Uint8Array(big,p,n),8);
         if(isHost&&!dc)await fwd(r,u.buffer);
-        else{const c=dc?dc[idx%NS]:conn;if(!c||!c.open){bad=1;break}await drain(c);c.send(u)}
+        else{const c=dc?dc[idx%dc.length]:conn;if(!c||!c.open){bad=1;break}await drain(c);c.send(u)}
         idx++;
       }
       off+=big.byteLength;
